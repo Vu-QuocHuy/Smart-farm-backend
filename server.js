@@ -15,6 +15,7 @@ const {
 
 // Import routes
 const authRoutes = require('./src/routes/auth.routes');
+const userRoutes = require('./src/routes/user.routes');
 const sensorRoutes = require('./src/routes/sensor.routes');
 const deviceRoutes = require('./src/routes/device.routes');
 const alertRoutes = require('./src/routes/alert.routes');
@@ -39,6 +40,7 @@ app.use('/api', apiLimiter);
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/sensors', sensorRoutes);
 app.use('/api/devices', deviceRoutes);
 app.use('/api/alerts', alertRoutes);
