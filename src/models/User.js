@@ -24,6 +24,16 @@ const UserSchema = new mongoose.Schema({
         minlength: [6, 'Password phải có ít nhất 6 ký tự'],
         select: false  // Không trả về password khi query
     },
+    phone: {
+        type: String,
+        trim: true,
+        match: [/^[0-9]{10}$/, 'Số điện thoại không hợp lệ (phải có đúng 10 số)']
+    },
+    address: {
+        type: String,
+        trim: true,
+        maxlength: [200, 'Địa chỉ không được quá 200 ký tự']
+    },
     role: {
         type: String,
         enum: ['admin', 'user'],

@@ -65,9 +65,6 @@ activityLogSchema.index({ userId: 1, createdAt: -1 });
 activityLogSchema.index({ action: 1, createdAt: -1 });
 activityLogSchema.index({ status: 1, createdAt: -1 });
 
-// TTL index - Tự động xóa log sau 90 ngày
-activityLogSchema.index({ createdAt: 1 }, { expireAfterSeconds: 7776000 }); // 90 ngày
-
 const ActivityLog = mongoose.model('ActivityLog', activityLogSchema);
 
 module.exports = ActivityLog;
