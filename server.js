@@ -24,6 +24,9 @@ const activityLogRoutes = require('./src/routes/activity-log.routes');
 
 const app = express();
 
+// Trust proxy - Required for Render, Heroku, AWS, etc.
+app.set('trust proxy', 1);
+
 // Middleware
 app.use(cors());
 app.use(helmet());
