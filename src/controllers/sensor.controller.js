@@ -34,10 +34,12 @@ exports.getLatestSensorData = async (req, res) => {
 
 // @desc    Lấy lịch sử dữ liệu cảm biến
 // @route   GET /api/sensors/history?type=temperature&hours=24
+//          GET /api/sensors/history?type=temperature&days=7
+//          GET /api/sensors/history?type=temperature&startDate=2025-01-01&endDate=2025-01-07
 // @access  Public
 exports.getSensorHistory = async (req, res) => {
   try {
-    const { type, hours = 24 } = req.query;
+    const { type, hours = 24, days, startDate, endDate } = req.query;
 
     if (!type) {
       return res.status(400).json({
@@ -46,20 +48,55 @@ exports.getSensorHistory = async (req, res) => {
       });
     }
 
-    // Tính thời gian bắt đầu
-    const startTime = new Date(Date.now() - hours * 60 * 60 * 1000);
+    // Ưu tiên startDate/endDate -> days -> hours
+    let startTime;
+    let endTime = endDate ? new Date(endDate) : new Date();
+
+    if (startDate) {
+      startTime = new Date(startDate);
+    } else if (days !== undefined) {
+      const daysNumber = Number(days);
+      if (Number.isNaN(daysNumber) || daysNumber <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Giá trị days không hợp lệ'
+        });
+      }
+      startTime = new Date(Date.now() - daysNumber * 24 * 60 * 60 * 1000);
+    } else {
+      const hoursNumber = Number(hours);
+      if (Number.isNaN(hoursNumber) || hoursNumber <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Giá trị hours không hợp lệ'
+        });
+      }
+      startTime = new Date(Date.now() - hoursNumber * 60 * 60 * 1000);
+    }
+
+    // Validate range
+    if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+      return res.status(400).json({
+        success: false,
+        message: 'Thời gian không hợp lệ'
+      });
+    }
 
     const history = await SensorData.find({
       sensorType: type,
-      createdAt: { $gte: startTime }
+      createdAt: { $gte: startTime, $lte: endTime }
     })
       .sort({ createdAt: 1 })  // Sắp xếp tăng dần (cũ -> mới)
-      .limit(1000);  // Giới hạn 1000 records
+      .limit(2000);  // Giới hạn để tránh trả quá nhiều điểm
 
     res.status(200).json({
       success: true,
       count: history.length,
-      data: history
+      data: history,
+      range: {
+        start: startTime,
+        end: endTime
+      }
     });
 
   } catch (error) {

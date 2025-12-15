@@ -8,7 +8,7 @@ exports.authenticate = async (req, res, next) => {
     if (!token) {
       return res.status(401).json({
         success: false,
-        message: 'Không tìm thấy token. Vui lòng đăng nhập'
+        message: 'Vui lòng đăng nhập'
       });
     }
 
