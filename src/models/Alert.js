@@ -19,11 +19,8 @@ const AlertSchema = new mongoose.Schema({
     status: {
         type: String,
         required: true,
-        enum: ['active', 'resolved']
-    },
-    isRead: {
-        type: Boolean,
-        default: false
+        enum: ['active', 'resolved'],
+        default: 'active'
     },
     title: {
         type: String,
@@ -32,6 +29,32 @@ const AlertSchema = new mongoose.Schema({
     data: {
         type: Map,  // Dữ liệu liên quan (sensor value, threshold...)
         of: mongoose.Schema.Types.Mixed
+    },
+    targetAll: {
+        type: Boolean,
+        default: true
+    },
+    targetUsers: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    }],
+    createdBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false
+    },
+    autoResolved: {
+        type: Boolean,
+        default: false
+    },
+    resolvedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false
+    },
+    resolvedAt: {
+        type: Date,
+        required: false
     }
 }, { timestamps: true });
 
