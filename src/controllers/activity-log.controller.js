@@ -57,40 +57,6 @@ exports.getAllLogs = async (req, res) => {
   }
 };
 
-// Lấy log của user hiện tại
-exports.getMyLogs = async (req, res) => {
-  try {
-    const { page = 1, limit = 50 } = req.query;
-    const skip = (page - 1) * limit;
-
-    const [logs, total] = await Promise.all([
-      ActivityLog.find({ userId: req.user.userId })
-        .sort({ createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-      ActivityLog.countDocuments({ userId: req.user.userId })
-    ]);
-
-    res.status(200).json({
-      success: true,
-      data: {
-        logs,
-        pagination: {
-          total,
-          page: parseInt(page),
-          pages: Math.ceil(total / limit),
-          limit: parseInt(limit)
-        }
-      }
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message
-    });
-  }
-};
-
 // Thống kê hoạt động (Admin only)
 exports.getActivityStats = async (req, res) => {
   try {
