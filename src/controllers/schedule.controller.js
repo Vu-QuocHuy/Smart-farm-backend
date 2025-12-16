@@ -1,5 +1,16 @@
 const Schedule = require('../models/Schedule');
 
+// Kiểm tra lịch trùng: cùng device, cùng time và trùng ngày trong tuần
+const hasScheduleConflict = async ({ deviceName, time, daysOfWeek, excludeId }) => {
+  return Schedule.findOne({
+    deviceName,
+    time,
+    enabled: true,
+    _id: { $ne: excludeId },
+    daysOfWeek: { $in: daysOfWeek || [] }
+  });
+};
+
 // @desc    Lấy tất cả lịch
 // @route   GET /api/schedules
 // @access  Public
@@ -27,7 +38,30 @@ exports.getAllSchedules = async (req, res) => {
 // @access  Public
 exports.createSchedule = async (req, res) => {
   try {
-    const schedule = await Schedule.create(req.body);
+    const payload = {
+      name: req.body.name,
+      deviceName: req.body.deviceName,
+      action: req.body.action,
+      time: req.body.time,
+      daysOfWeek: req.body.daysOfWeek || [0,1,2,3,4,5,6],
+      enabled: req.body.enabled !== undefined ? req.body.enabled : true,
+    };
+
+    if (payload.enabled) {
+      const conflict = await hasScheduleConflict({
+        deviceName: payload.deviceName,
+        time: payload.time,
+        daysOfWeek: payload.daysOfWeek
+      });
+      if (conflict) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiết bị đã có lịch trùng khung giờ/ngày. Vui lòng chọn thời gian khác.'
+        });
+      }
+    }
+
+    const schedule = await Schedule.create(payload);
 
     res.status(201).json({
       success: true,
@@ -49,11 +83,7 @@ exports.createSchedule = async (req, res) => {
 // @access  Public
 exports.updateSchedule = async (req, res) => {
   try {
-    const schedule = await Schedule.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true, runValidators: true }
-    );
+    const schedule = await Schedule.findById(req.params.id);
 
     if (!schedule) {
       return res.status(404).json({
@@ -61,6 +91,34 @@ exports.updateSchedule = async (req, res) => {
         message: 'Không tìm thấy lịch'
       });
     }
+
+    // Chuẩn bị dữ liệu cập nhật
+    const updated = {
+      name: req.body.name ?? schedule.name,
+      deviceName: req.body.deviceName ?? schedule.deviceName,
+      action: req.body.action ?? schedule.action,
+      time: req.body.time ?? schedule.time,
+      daysOfWeek: req.body.daysOfWeek ?? schedule.daysOfWeek,
+      enabled: req.body.enabled !== undefined ? req.body.enabled : schedule.enabled,
+    };
+
+    if (updated.enabled) {
+      const conflict = await hasScheduleConflict({
+        deviceName: updated.deviceName,
+        time: updated.time,
+        daysOfWeek: updated.daysOfWeek,
+        excludeId: schedule._id
+      });
+      if (conflict) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiết bị đã có lịch trùng khung giờ/ngày. Vui lòng chọn thời gian khác.'
+        });
+      }
+    }
+
+    Object.assign(schedule, updated);
+    await schedule.save();
 
     res.status(200).json({
       success: true,
@@ -117,6 +175,22 @@ exports.toggleSchedule = async (req, res) => {
         success: false,
         message: 'Không tìm thấy lịch'
       });
+    }
+
+    // Khi bật lại cần kiểm tra xung đột
+    if (!schedule.enabled) {
+      const conflict = await hasScheduleConflict({
+        deviceName: schedule.deviceName,
+        time: schedule.time,
+        daysOfWeek: schedule.daysOfWeek,
+        excludeId: schedule._id
+      });
+      if (conflict) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiết bị đã có lịch trùng khung giờ/ngày. Vui lòng chọn thời gian khác.'
+        });
+      }
     }
 
     schedule.enabled = !schedule.enabled;

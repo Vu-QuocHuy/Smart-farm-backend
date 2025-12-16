@@ -10,20 +10,14 @@ const activityLogSchema = new mongoose.Schema({
     type: String,
     required: true,
     enum: [
-      // Authentication
-      'login', 'logout', 'register_user', 'change_password',
+      // User management
+      'register_user', 'update_user', 'delete_user', 'toggle_user_status',
       // Device control
-      'control_device', 'view_device_status',
-      // Sensor
-      'view_sensor_data',
-      // Alert
-      'view_alerts', 'mark_alert_read',
-      // Schedule
-      'create_schedule', 'update_schedule', 'delete_schedule', 'view_schedule',
-      // Threshold
+      'control_device',
+      // Schedule (CRUD)
+      'create_schedule', 'update_schedule', 'delete_schedule',
+      // Threshold (CRUD)
       'create_threshold', 'update_threshold', 'delete_threshold',
-      // System
-      'view_activity_logs', 'export_data'
     ]
   },
   resourceType: {
@@ -39,22 +33,10 @@ const activityLogSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.Mixed, // Lưu thông tin chi tiết
     required: false
   },
-  ipAddress: {
-    type: String,
-    required: false
-  },
-  userAgent: {
-    type: String,
-    required: false
-  },
   status: {
     type: String,
     enum: ['success', 'failed'],
     default: 'success'
-  },
-  errorMessage: {
-    type: String,
-    required: false
   }
 }, {
   timestamps: true

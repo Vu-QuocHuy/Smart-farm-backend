@@ -14,7 +14,7 @@ router.post('/register', authenticate, requireAdmin, registerLimiter, validateRe
 // @route   POST /api/auth/login
 // @desc    Đăng nhập
 // @access  Public
-router.post('/login', loginLimiter, validateLogin, logActivity('login'), authController.login);
+router.post('/login', loginLimiter, validateLogin, authController.login);
 
 // @route   POST /api/auth/refresh
 // @desc    Refresh access token
@@ -24,7 +24,7 @@ router.post('/refresh', authController.refreshToken);
 // @route   POST /api/auth/logout
 // @desc    Đăng xuất
 // @access  Public
-router.post('/logout', authenticate, logActivity('logout'), authController.logout);
+router.post('/logout', authenticate, authController.logout);
 
 // @route   PUT /api/auth/change-password
 // @desc    Đổi mật khẩu (User tự đổi)

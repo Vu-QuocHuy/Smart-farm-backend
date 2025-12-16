@@ -138,13 +138,13 @@ exports.updateUser = async (req, res) => {
       { new: true, runValidators: true }
     ).select('-password');
 
-    // Log activity
+    // Log activity - cập nhật user
     await ActivityLog.create({
       userId: req.user.id,
-      username: req.user.username,
-      action: 'user_management',
-      description: `Cập nhật thông tin user: ${updatedUser.username}`,
-      ip: req.ip || req.connection.remoteAddress
+      action: 'update_user',
+      resourceType: 'user',
+      resourceId: updatedUser._id.toString(),
+      details: updates,
     });
 
     res.json({
@@ -187,13 +187,13 @@ exports.toggleUserStatus = async (req, res) => {
     user.isActive = !user.isActive;
     await user.save();
 
-    // Log activity
+    // Log activity - khóa/mở khóa user
     await ActivityLog.create({
       userId: req.user.id,
-      username: req.user.username,
-      action: 'user_management',
-      description: `${user.isActive ? 'Mở khóa' : 'Khóa'} tài khoản: ${user.username}`,
-      ip: req.ip || req.connection.remoteAddress
+      action: 'toggle_user_status',
+      resourceType: 'user',
+      resourceId: user._id.toString(),
+      details: { targetUser: user.username, isActive: user.isActive },
     });
 
     res.json({
@@ -238,13 +238,13 @@ exports.deleteUser = async (req, res) => {
 
     await user.deleteOne();
 
-    // Log activity
+    // Log activity - xóa user
     await ActivityLog.create({
       userId: req.user.id,
-      username: req.user.username,
-      action: 'user_management',
-      description: `Xóa tài khoản: ${user.username}`,
-      ip: req.ip || req.connection.remoteAddress
+      action: 'delete_user',
+      resourceType: 'user',
+      resourceId: user._id.toString(),
+      details: { targetUser: user.username },
     });
 
     res.json({

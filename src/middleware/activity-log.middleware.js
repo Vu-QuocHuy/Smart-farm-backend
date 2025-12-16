@@ -14,9 +14,7 @@ const logActivity = (action, resourceType = null) => {
           userId: req.user.userId,
           action: action,
           resourceType: resourceType,
-          status: res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failed',
-          ipAddress: req.ip || req.connection.remoteAddress,
-          userAgent: req.get('user-agent')
+        status: res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failed'
         };
 
         // Lưu resourceId nếu có trong params
@@ -28,11 +26,6 @@ const logActivity = (action, resourceType = null) => {
         if (req.body) {
           const { password, currentPassword, newPassword, confirmPassword, ...safeBody } = req.body;
           logData.details = safeBody;
-        }
-
-        // Lưu error message nếu có
-        if (logData.status === 'failed' && data.message) {
-          logData.errorMessage = data.message;
         }
 
         // Tạo log bất đồng bộ (không chặn response)
