@@ -56,7 +56,12 @@ class MQTTService {
     mqtt.client.on('message', async (topic, message) => {
       try {
         const payload = message.toString();
-        console.log(`Received: ${topic} -> ${payload}`);
+
+        // Log chi tiết dữ liệu MQTT nhận được từ broker
+        console.log('MQTT message received from broker:', {
+          topic,
+          payload,
+        });
 
         // Xử lý theo topic
         if (topic.includes('/sensors/')) {
@@ -76,8 +81,28 @@ class MQTTService {
       // Parse sensor type từ topic
       // Ví dụ: farm/sensors/temperature -> temperature
       const sensorType = topic.split('/').pop();
-      
-      const value = parseFloat(payload);
+
+      // Cố gắng parse JSON nếu ESP gửi dạng JSON, fallback sang parseFloat
+      let value;
+      let parsed;
+      try {
+        parsed = JSON.parse(payload);
+        // Ưu tiên trường "value" nếu có, nếu không thì lấy số đầu tiên
+        if (parsed && typeof parsed.value !== 'undefined') {
+          value = parseFloat(parsed.value);
+        } else {
+          value = parseFloat(payload);
+        }
+      } catch {
+        value = parseFloat(payload);
+      }
+
+      console.log('MQTT sensor data after parse:', {
+        topic,
+        sensorType,
+        value,
+        rawPayload: payload,
+      });
 
       // Xác định đơn vị
       const unitMap = {
