@@ -47,7 +47,8 @@ exports.validateLogin = (req, res, next) => {
 };
 
 exports.validateDeviceControl = (req, res, next) => {
-  const { deviceName, action } = req.body;
+  const { deviceName } = req.body;
+  let { action } = req.body;
 
   if (!deviceName || !action) {
     return res.status(400).json({
@@ -55,6 +56,10 @@ exports.validateDeviceControl = (req, res, next) => {
       message: 'Thiếu deviceName hoặc action'
     });
   }
+
+  // Chuẩn hóa action về uppercase để chấp nhận 'on'/'off'/'auto'
+  action = action.toString().toUpperCase();
+  req.body.action = action;
 
   const validActions = ['ON', 'OFF', 'AUTO'];
   if (!validActions.includes(action)) {
