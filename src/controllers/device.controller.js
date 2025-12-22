@@ -38,7 +38,17 @@ exports.controlDevice = async (req, res) => {
 // @access  Public
 exports.getDeviceStatus = async (req, res) => {
   try {
-    const devices = ['pump', 'fan', 'servo', 'light'];
+    const devices = [
+      'pump',
+      'fan',
+      'light',
+      'servo',
+      'servo1',
+      'servo2',
+      'led1',
+      'led2',
+      'led3',
+    ];
     const status = {};
 
     for (const device of devices) {
