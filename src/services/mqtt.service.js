@@ -1,17 +1,17 @@
-const mqtt = require('../config/mqtt');
-const SensorData = require('../models/SensorData');
-const DeviceControl = require('../models/DeviceControl');
-const Alert = require('../models/Alert');
-const Threshold = require('../models/Threshold');
+const mqtt = require("../config/mqtt");
+const SensorData = require("../models/SensorData");
+const DeviceControl = require("../models/DeviceControl");
+const Alert = require("../models/Alert");
+const Threshold = require("../models/Threshold");
 
 class MQTTService {
   constructor() {
-    this.topicPrefix = process.env.MQTT_TOPIC_PREFIX || 'farm';
+    this.topicPrefix = process.env.MQTT_TOPIC_PREFIX || "farm";
   }
 
   // Khởi động MQTT service
   start() {
-    console.log('Starting MQTT Service...');
+    console.log("Starting MQTT Service...");
 
     // Kết nối MQTT
     mqtt.connect();
@@ -31,10 +31,10 @@ class MQTTService {
       `${this.topicPrefix}/sensors/humidity`,
       `${this.topicPrefix}/sensors/soil_moisture`,
       `${this.topicPrefix}/sensors/water_level`,
-      `${this.topicPrefix}/sensors/light`
+      `${this.topicPrefix}/sensors/light`,
     ];
 
-    sensorTopics.forEach(topic => {
+    sensorTopics.forEach((topic) => {
       mqtt.subscribe(topic);
     });
   }
@@ -43,34 +43,34 @@ class MQTTService {
   subscribeToStatusTopics() {
     const statusTopics = [
       `${this.topicPrefix}/status/pump`,
-      `${this.topicPrefix}/status/connection`
+      `${this.topicPrefix}/status/connection`,
     ];
 
-    statusTopics.forEach(topic => {
+    statusTopics.forEach((topic) => {
       mqtt.subscribe(topic);
     });
   }
 
   // Xử lý messages nhận được
   handleMessages() {
-    mqtt.client.on('message', async (topic, message) => {
+    mqtt.client.on("message", async (topic, message) => {
       try {
         const payload = message.toString();
 
         // Log chi tiết dữ liệu MQTT nhận được từ broker
-        console.log('MQTT message received from broker:', {
+        console.log("MQTT message received from broker:", {
           topic,
           payload,
         });
 
         // Xử lý theo topic
-        if (topic.includes('/sensors/')) {
+        if (topic.includes("/sensors/")) {
           await this.handleSensorData(topic, payload);
-        } else if (topic.includes('/status/')) {
+        } else if (topic.includes("/status/")) {
           await this.handleStatusUpdate(topic, payload);
         }
       } catch (error) {
-        console.error('Error handling message:', error);
+        console.error("Error handling message:", error);
       }
     });
   }
@@ -80,7 +80,7 @@ class MQTTService {
     try {
       // Parse sensor type từ topic
       // Ví dụ: farm/sensors/temperature -> temperature
-      const sensorType = topic.split('/').pop();
+      const sensorType = topic.split("/").pop();
 
       // Cố gắng parse JSON nếu ESP gửi dạng JSON, fallback sang parseFloat
       let value;
@@ -88,7 +88,7 @@ class MQTTService {
       try {
         parsed = JSON.parse(payload);
         // Ưu tiên trường "value" nếu có, nếu không thì lấy số đầu tiên
-        if (parsed && typeof parsed.value !== 'undefined') {
+        if (parsed && typeof parsed.value !== "undefined") {
           value = parseFloat(parsed.value);
         } else {
           value = parseFloat(payload);
@@ -97,7 +97,7 @@ class MQTTService {
         value = parseFloat(payload);
       }
 
-      console.log('MQTT sensor data after parse:', {
+      console.log("MQTT sensor data after parse:", {
         topic,
         sensorType,
         value,
@@ -106,45 +106,45 @@ class MQTTService {
 
       // Xác định đơn vị
       const unitMap = {
-        temperature: '°C',
-        humidity: '%',
-        soil_moisture: '%',
-        water_level: 'cm',
-        light: 'lux'
+        temperature: "°C",
+        humidity: "%",
+        soil_moisture: "%",
+        water_level: "cm",
+        light: "lux",
       };
 
       // Lưu vào database
       const sensorData = await SensorData.create({
         sensorType,
         value,
-        unit: unitMap[sensorType]
+        unit: unitMap[sensorType],
       });
 
-      console.log(`Saved sensor data: ${sensorType} = ${value}${unitMap[sensorType]}`);
+      console.log(
+        `Saved sensor data: ${sensorType} = ${value}${unitMap[sensorType]}`
+      );
 
       // Kiểm tra ngưỡng và tạo cảnh báo
       await this.checkThresholdsAndAlert(sensorType, value);
 
       // Logic tự động
       await this.autoControl(sensorType, value);
-
     } catch (error) {
-      console.error('Error handling sensor data:', error);
+      console.error("Error handling sensor data:", error);
     }
   }
 
   // Xử lý trạng thái thiết bị
   async handleStatusUpdate(topic, payload) {
     try {
-      const deviceName = topic.split('/').pop(); // pump, connection...
-      
+      const deviceName = topic.split("/").pop(); // pump, connection...
+
       console.log(`Status update: ${deviceName} -> ${payload}`);
 
       // Có thể lưu vào log hoặc xử lý logic khác
       // Ví dụ: Nếu connection lost -> tạo alert
-
     } catch (error) {
-      console.error('Error handling status:', error);
+      console.error("Error handling status:", error);
     }
   }
 
@@ -152,9 +152,9 @@ class MQTTService {
   async checkThresholdsAndAlert(sensorType, value) {
     try {
       // Lấy ngưỡng từ database
-      const threshold = await Threshold.findOne({ 
-        sensorType, 
-        isActive: true 
+      const threshold = await Threshold.findOne({
+        sensorType,
+        isActive: true,
       });
 
       if (!threshold) {
@@ -165,16 +165,17 @@ class MQTTService {
       let alert = null;
 
       // Kiểm tra ngưỡng min (giá trị thấp)
-      if (threshold.minValue !== undefined && 
-          (threshold.alertType === 'low' || threshold.alertType === 'both') &&
-          value < threshold.minValue) {
-        
+      if (
+        threshold.minValue !== undefined &&
+        (threshold.alertType === "low" || threshold.alertType === "both") &&
+        value < threshold.minValue
+      ) {
         const titleMap = {
-          soil_moisture: 'Độ ẩm đất thấp',
-          water_level: 'Mực nước thấp',
-          temperature: 'Nhiệt độ thấp',
-          humidity: 'Độ ẩm không khí thấp',
-          light: 'Ánh sáng yếu'
+          soil_moisture: "Độ ẩm đất thấp",
+          water_level: "Mực nước thấp",
+          temperature: "Nhiệt độ thấp",
+          humidity: "Độ ẩm không khí thấp",
+          light: "Ánh sáng yếu",
         };
 
         alert = {
@@ -182,21 +183,22 @@ class MQTTService {
           severity: threshold.severity,
           title: titleMap[sensorType] || `${sensorType} thấp`,
           message: `${sensorType} hiện tại ${value}, thấp hơn ngưỡng ${threshold.minValue}`,
-          status: 'active'
+          status: "active",
         };
       }
 
       // Kiểm tra ngưỡng max (giá trị cao)
-      if (threshold.maxValue !== undefined && 
-          (threshold.alertType === 'high' || threshold.alertType === 'both') &&
-          value > threshold.maxValue) {
-        
+      if (
+        threshold.maxValue !== undefined &&
+        (threshold.alertType === "high" || threshold.alertType === "both") &&
+        value > threshold.maxValue
+      ) {
         const titleMap = {
-          soil_moisture: 'Độ ẩm đất cao',
-          water_level: 'Mực nước cao',
-          temperature: 'Nhiệt độ cao',
-          humidity: 'Độ ẩm không khí cao',
-          light: 'Ánh sáng mạnh'
+          soil_moisture: "Độ ẩm đất cao",
+          water_level: "Mực nước cao",
+          temperature: "Nhiệt độ cao",
+          humidity: "Độ ẩm không khí cao",
+          light: "Ánh sáng mạnh",
         };
 
         alert = {
@@ -204,7 +206,7 @@ class MQTTService {
           severity: threshold.severity,
           title: titleMap[sensorType] || `${sensorType} cao`,
           message: `${sensorType} hiện tại ${value}, vượt ngưỡng ${threshold.maxValue}`,
-          status: 'active'
+          status: "active",
         };
       }
 
@@ -212,13 +214,12 @@ class MQTTService {
       if (alert) {
         await Alert.create(alert);
         console.log(`Alert created: ${alert.title}`);
-        
+
         // Publish alert lên MQTT cho app
         this.publishAlert(alert);
       }
-
     } catch (error) {
-      console.error('Error checking thresholds:', error);
+      console.error("Error checking thresholds:", error);
     }
   }
 
@@ -226,42 +227,43 @@ class MQTTService {
   async autoControl(sensorType, value) {
     try {
       // Tự động bật bơm nếu đất khô
-      if (sensorType === 'soil_moisture' && value < 30) {
-        console.log('Độ ẩm đất thấp, tự động bật bơm...');
-        await this.controlDevice('pump', 'ON', 'auto');
+      if (sensorType === "soil_moisture" && value < 30) {
+        console.log("Độ ẩm đất thấp, tự động bật bơm...");
+        await this.controlDevice("pump", "ON", "auto");
       }
 
       // Tự động bật quạt nếu nhiệt độ cao
-      if (sensorType === 'temperature' && value > 35) {
-        console.log('Nhiệt độ cao, tự động bật quạt...');
-        await this.controlDevice('fan', 'ON', 'auto');
+      if (sensorType === "temperature" && value > 35) {
+        console.log("Nhiệt độ cao, tự động bật quạt...");
+        await this.controlDevice("fan", "ON", "auto");
       }
-
     } catch (error) {
-      console.error('Error in auto control:', error);
+      console.error("Error in auto control:", error);
     }
   }
 
   // Điều khiển thiết bị
-  async controlDevice(deviceName, status, controlledBy = 'user', value = 0) {
+  async controlDevice(deviceName, status, controlledBy = 'manual') {
     try {
       // Lưu vào database
       await DeviceControl.create({
-        deviceName,
+        deviceName: dbDeviceName,
         status,
-        controlledBy,
-        value,
+        controlledBy
       });
 
-      // Publish lệnh xuống ESP32
+      // Publish lệnh xuống ESP32 using original deviceName so topics like
+      // farm/control/led1 still reach the ESP devices
       const topic = `${this.topicPrefix}/control/${deviceName}`;
       mqtt.publish(topic, status);
 
-      console.log(`Device control: ${deviceName} -> ${status}`);
+      console.log(
+        `Device control: ${deviceName} -> ${status} (saved as ${dbDeviceName}, by ${dbControlledBy})`
+      );
 
       return true;
     } catch (error) {
-      console.error('Error controlling device:', error);
+      console.error("Error controlling device:", error);
       return false;
     }
   }
@@ -275,7 +277,7 @@ class MQTTService {
   // Dừng service
   stop() {
     mqtt.disconnect();
-    console.log('MQTT Service stopped');
+    console.log("MQTT Service stopped");
   }
 }
 
