@@ -9,7 +9,7 @@ exports.controlDevice = async (req, res) => {
     const { deviceName, action, value } = req.body;
 
     // Điều khiển qua MQTT
-    const result = await mqttService.controlDevice(deviceName, action, 'manual', value);
+    const result = await mqttService.controlDevice(deviceName, action, 'user', value);
 
     if (result) {
       res.json({

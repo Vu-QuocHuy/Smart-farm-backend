@@ -243,13 +243,14 @@ class MQTTService {
   }
 
   // Điều khiển thiết bị
-  async controlDevice(deviceName, status, controlledBy = 'manual') {
+  async controlDevice(deviceName, status, controlledBy = 'user', value = 0) {
     try {
       // Lưu vào database
       await DeviceControl.create({
         deviceName,
         status,
-        controlledBy
+        controlledBy,
+        value,
       });
 
       // Publish lệnh xuống ESP32
