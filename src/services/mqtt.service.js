@@ -269,38 +269,13 @@ class MQTTService {
   }
 
   // Điều khiển thiết bị
-  async controlDevice(deviceName, status, controlledBy = "manual", value = 0) {
+  async controlDevice(deviceName, status, controlledBy = 'manual') {
     try {
-      // Map incoming device names (e.g., led1, led2, led3) to DB enum values
-      // DB accepts: ['pump','fan','servo','light']
-      const deviceNameLower = String(deviceName || "").toLowerCase();
-      let dbDeviceName = deviceNameLower;
-      if (deviceNameLower.startsWith("led")) {
-        // Treat all leds as generic 'light' in DB
-        dbDeviceName = "light";
-      }
-
-      // Map controlledBy values ('manual' -> 'user') to match DB enum
-      let dbControlledBy = String(controlledBy || "").toLowerCase();
-      if (dbControlledBy === "manual") dbControlledBy = "user";
-      if (!["user", "auto", "schedule"].includes(dbControlledBy)) {
-        // default to 'user' for unknown values
-        dbControlledBy = "user";
-      }
-      if (deviceNameLower.startsWith("led") || deviceNameLower === "light") {
-        // Treat all leds as generic 'light' in DB
-        dbDeviceName = "light";
-      } else if (deviceNameLower.startsWith("servo")) {
-        // Map any servo_* to generic 'servo'
-        dbDeviceName = "servo";
-      }
-
-      // Lưu vào database (use mapped dbDeviceName / dbControlledBy)
+      // Lưu vào database
       await DeviceControl.create({
         deviceName: dbDeviceName,
         status,
-        controlledBy: dbControlledBy,
-        value,
+        controlledBy
       });
 
       // Publish lệnh xuống ESP32 using original deviceName so topics like
