@@ -19,9 +19,31 @@ class MQTTService {
     // Subscribe các topics từ ESP32
     this.subscribeToSensorTopics();
     this.subscribeToStatusTopics();
+    // Publish thresholds to devices on startup
+    this.publishThresholds().catch((err) =>
+      console.error("Publish thresholds error:", err)
+    );
 
     // Xử lý messages
     this.handleMessages();
+  }
+
+  async publishThresholds() {
+    try {
+      const thresholds = await Threshold.find({ isActive: true });
+      const payload = thresholds.map((t) => ({
+        sensorType: t.sensorType,
+        minValue: t.minValue,
+        maxValue: t.maxValue,
+        alertType: t.alertType,
+        severity: t.severity,
+      }));
+      const topic = `${this.topicPrefix}/config/thresholds`;
+      mqtt.publish(topic, JSON.stringify(payload));
+      console.log("Published thresholds to MQTT");
+    } catch (err) {
+      console.error("Failed to publish thresholds:", err);
+    }
   }
 
   // Subscribe topics cảm biến
@@ -67,7 +89,11 @@ class MQTTService {
         if (topic.includes("/sensors/")) {
           await this.handleSensorData(topic, payload);
         } else if (topic.includes("/status/")) {
-          await this.handleStatusUpdate(topic, payload);
+          if (topic.endsWith("/request_thresholds")) {
+            await this.publishThresholds();
+          } else {
+            await this.handleStatusUpdate(topic, payload);
+          }
         }
       } catch (error) {
         console.error("Error handling message:", error);
