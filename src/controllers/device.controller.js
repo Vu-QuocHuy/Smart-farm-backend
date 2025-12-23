@@ -12,7 +12,7 @@ exports.controlDevice = async (req, res) => {
     const result = await mqttService.controlDevice(
       deviceName,
       action,
-      "user",
+      "manual",
       value
     );
 
@@ -29,11 +29,19 @@ exports.controlDevice = async (req, res) => {
       });
     }
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Lỗi server",
-      error: error.message,
-    });
+    // Nếu lỗi là ESP32 offline, trả về status 503
+    if (error.message && error.message.includes("offline")) {
+      res.status(503).json({
+        success: false,
+        message: error.message,
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        message: "Lỗi server",
+        error: error.message,
+      });
+    }
   }
 };
 
