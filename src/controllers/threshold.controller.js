@@ -1,21 +1,22 @@
-const Threshold = require('../models/Threshold');
+const Threshold = require("../models/Threshold");
+const mqttService = require("../services/mqtt.service");
 
 // Lấy tất cả ngưỡng cảnh báo
 exports.getAllThresholds = async (req, res) => {
   try {
     const thresholds = await Threshold.find()
-      .populate('createdBy', 'username')
-      .populate('updatedBy', 'username')
+      .populate("createdBy", "username")
+      .populate("updatedBy", "username")
       .sort({ sensorType: 1 });
 
     res.status(200).json({
       success: true,
-      data: thresholds
+      data: thresholds,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -26,24 +27,24 @@ exports.getThresholdBySensor = async (req, res) => {
     const { sensorType } = req.params;
 
     const threshold = await Threshold.findOne({ sensorType, isActive: true })
-      .populate('createdBy', 'username')
-      .populate('updatedBy', 'username');
+      .populate("createdBy", "username")
+      .populate("updatedBy", "username");
 
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng cho loại cảm biến này'
+        message: "Không tìm thấy ngưỡng cho loại cảm biến này",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: threshold
+      data: threshold,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -51,13 +52,18 @@ exports.getThresholdBySensor = async (req, res) => {
 // Tạo hoặc cập nhật ngưỡng (Admin only)
 exports.upsertThreshold = async (req, res) => {
   try {
-    const { sensorType, minValue, maxValue, alertType, severity, isActive } = req.body;
+    const { sensorType, minValue, maxValue, alertType, severity, isActive } =
+      req.body;
 
     // Kiểm tra logic
-    if (minValue !== undefined && maxValue !== undefined && minValue >= maxValue) {
+    if (
+      minValue !== undefined &&
+      maxValue !== undefined &&
+      minValue >= maxValue
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'Giá trị min phải nhỏ hơn max'
+        message: "Giá trị min phải nhỏ hơn max",
       });
     }
 
@@ -72,25 +78,29 @@ exports.upsertThreshold = async (req, res) => {
         severity,
         isActive,
         updatedBy: req.user.userId,
-        createdBy: req.user.userId // Chỉ set khi tạo mới
+        createdBy: req.user.userId, // Chỉ set khi tầo mới
       },
       {
         new: true,
         upsert: true,
         setDefaultsOnInsert: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
+    // Publish threshold update to MQTT for ESP32
+    await mqttService.publishThresholds();
+    console.log("Published updated thresholds to MQTT");
+
     res.status(200).json({
       success: true,
-      message: 'Cập nhật ngưỡng cảnh báo thành công',
-      data: threshold
+      message: "Cập nhật ngưỡng cảnh báo thành công",
+      data: threshold,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -105,18 +115,22 @@ exports.deleteThreshold = async (req, res) => {
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng'
+        message: "Không tìm thấy ngưỡng",
       });
     }
 
+    // Publish threshold update to MQTT after deletion
+    await mqttService.publishThresholds();
+    console.log("Published updated thresholds to MQTT after deletion");
+
     res.status(200).json({
       success: true,
-      message: 'Xóa ngưỡng thành công'
+      message: "Xóa ngưỡng thành công",
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -136,19 +150,23 @@ exports.toggleThreshold = async (req, res) => {
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng'
+        message: "Không tìm thấy ngưỡng",
       });
     }
 
+    // Publish threshold update to MQTT after toggle
+    await mqttService.publishThresholds();
+    console.log("Published updated thresholds to MQTT after toggle");
+
     res.status(200).json({
       success: true,
-      message: `${isActive ? 'Bật' : 'Tắt'} ngưỡng thành công`,
-      data: threshold
+      message: `${isActive ? "Bật" : "Tắt"} ngưỡng thành công`,
+      data: threshold,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };

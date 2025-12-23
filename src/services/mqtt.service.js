@@ -40,8 +40,15 @@ class MQTTService {
         severity: t.severity,
       }));
       const topic = `${this.topicPrefix}/config/thresholds`;
-      mqtt.publish(topic, JSON.stringify(payload));
-      console.log("Published thresholds to MQTT");
+      const payloadStr = JSON.stringify(payload);
+
+      // Publish với retained flag để ESP32 nhận được ngay khi kết nối
+      mqtt.publish(topic, payloadStr, { retained: true });
+
+      console.log("Published thresholds to MQTT (retained):");
+      console.log(`  Topic: ${topic}`);
+      console.log(`  Payload: ${payloadStr}`);
+      console.log(`  Count: ${thresholds.length} active thresholds`);
     } catch (err) {
       console.error("Failed to publish thresholds:", err);
     }
@@ -143,7 +150,7 @@ class MQTTService {
         humidity: "%",
         soil_moisture: "%",
         water_level: "cm",
-        light: "lux",
+        light: "%",
       };
 
       // Lưu vào database
