@@ -5,9 +5,15 @@ const Alert = require('../models/Alert');
 // @access  Public
 exports.getAllAlerts = async (req, res) => {
   try {
-    const { status, limit = 50 } = req.query;
+    const { status, severity, limit = 50 } = req.query;
 
-    const query = status ? { status } : {};
+    const query = {};
+    if (status) {
+      query.status = status;
+    }
+    if (severity) {
+      query.severity = severity;
+    }
     // Filter theo đối tượng nhận: targetAll hoặc targetUsers chứa user hiện tại hoặc không có targetUsers
     const audienceFilter = {
       $or: [
