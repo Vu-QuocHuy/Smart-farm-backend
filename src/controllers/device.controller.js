@@ -1,5 +1,5 @@
-const DeviceControl = require('../models/DeviceControl');
-const mqttService = require('../services/mqtt.service');
+const DeviceControl = require("../models/DeviceControl");
+const mqttService = require("../services/mqtt.service");
 
 // @desc    Điều khiển thiết bị
 // @route   POST /api/devices/control
@@ -9,26 +9,30 @@ exports.controlDevice = async (req, res) => {
     const { deviceName, action, value } = req.body;
 
     // Điều khiển qua MQTT
-    const result = await mqttService.controlDevice(deviceName, action, 'user', value);
+    const result = await mqttService.controlDevice(
+      deviceName,
+      action,
+      "user",
+      value
+    );
 
     if (result) {
       res.json({
         success: true,
         message: `Đã ${action} ${deviceName}`,
-        data: { deviceName, action, value }
+        data: { deviceName, action, value },
       });
     } else {
       res.status(500).json({
         success: false,
-        message: 'Lỗi khi điều khiển thiết bị'
+        message: "Lỗi khi điều khiển thiết bị",
       });
     }
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
@@ -39,15 +43,14 @@ exports.controlDevice = async (req, res) => {
 exports.getDeviceStatus = async (req, res) => {
   try {
     const devices = [
-      'pump',
-      'fan',
-      'light',
-      'servo',
-      'servo1',
-      'servo2',
-      'led1',
-      'led2',
-      'led3',
+      "pump",
+      "fan",
+      "light",
+      "servo_door",
+      "servo_feed",
+      "led_farm",
+      "led_animal",
+      "led_hallway",
     ];
     const status = {};
 
@@ -55,20 +58,19 @@ exports.getDeviceStatus = async (req, res) => {
       const latest = await DeviceControl.findOne({ deviceName: device })
         .sort({ createdAt: -1 })
         .limit(1);
-      
-      status[device] = latest ? latest.status : 'OFF';
+
+      status[device] = latest ? latest.status : "OFF";
     }
 
     res.status(200).json({
       success: true,
-      data: status
+      data: status,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi lấy trạng thái',
-      error: error.message
+      message: "Lỗi khi lấy trạng thái",
+      error: error.message,
     });
   }
 };
@@ -89,14 +91,13 @@ exports.getControlHistory = async (req, res) => {
     res.status(200).json({
       success: true,
       count: history.length,
-      data: history
+      data: history,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi lấy lịch sử',
-      error: error.message
+      message: "Lỗi khi lấy lịch sử",
+      error: error.message,
     });
   }
 };

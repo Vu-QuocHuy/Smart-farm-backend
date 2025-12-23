@@ -269,22 +269,21 @@ class MQTTService {
   }
 
   // Điều khiển thiết bị
-  async controlDevice(deviceName, status, controlledBy = 'manual') {
+  async controlDevice(deviceName, status, controlledBy = "manual") {
     try {
       // Lưu vào database
       await DeviceControl.create({
-        deviceName: dbDeviceName,
+        deviceName,
         status,
-        controlledBy
+        controlledBy,
       });
 
-      // Publish lệnh xuống ESP32 using original deviceName so topics like
-      // farm/control/led1 still reach the ESP devices
+      // Publish lệnh xuống ESP32
       const topic = `${this.topicPrefix}/control/${deviceName}`;
       mqtt.publish(topic, status);
 
       console.log(
-        `Device control: ${deviceName} -> ${status} (saved as ${dbDeviceName}, by ${dbControlledBy})`
+        `Device control: ${deviceName} -> ${status} (by ${controlledBy})`
       );
 
       return true;
