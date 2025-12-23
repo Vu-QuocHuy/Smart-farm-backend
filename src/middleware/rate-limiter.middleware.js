@@ -31,5 +31,12 @@ exports.apiLimiter = rateLimit({
     message: 'Quá nhiều requests. Vui lòng thử lại sau'
   },
   standardHeaders: true,
-  legacyHeaders: false
+  legacyHeaders: false,
+  /**
+   * Bỏ qua rate limit cho GET /api/sensors/latest
+   * vì frontend cần auto-refresh dữ liệu môi trường thường xuyên.
+   */
+  skip: (req) => {
+    return req.method === 'GET' && req.baseUrl === '/api/sensors' && req.path === '/latest';
+  },
 });
