@@ -81,30 +81,38 @@ exports.validateDeviceControl = (req, res, next) => {
 };
 
 exports.validateSchedule = (req, res, next) => {
-  const { name, deviceName, action, time } = req.body;
+  const { name, deviceName, action, startTime, endTime } = req.body;
 
-  if (!name || !deviceName || !action || !time) {
+  if (!name || !deviceName || !action || !startTime || !endTime) {
     return res.status(400).json({
       success: false,
-      message: 'Thiếu thông tin bắt buộc'
+      message: "Thiếu thông tin bắt buộc",
     });
   }
 
   const timeRegex = /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/;
-  if (!timeRegex.test(time)) {
+  if (!timeRegex.test(startTime) || !timeRegex.test(endTime)) {
     return res.status(400).json({
       success: false,
-      message: 'Time phải định dạng HH:mm (ví dụ: 08:30)'
+      message: "Thời gian phải định dạng HH:mm (ví dụ: 08:30)",
+    });
+  }
+
+  // Không hỗ trợ qua đêm: startTime phải < endTime
+  if (startTime >= endTime) {
+    return res.status(400).json({
+      success: false,
+      message: "Thời gian bắt đầu phải nhỏ hơn thời gian kết thúc",
     });
   }
 
   const { daysOfWeek } = req.body;
   if (daysOfWeek && Array.isArray(daysOfWeek)) {
-    const invalidDays = daysOfWeek.filter(day => day < 0 || day > 6);
+    const invalidDays = daysOfWeek.filter((day) => day < 0 || day > 6);
     if (invalidDays.length > 0) {
       return res.status(400).json({
         success: false,
-        message: 'daysOfWeek phải là các số từ 0-6'
+        message: "daysOfWeek phải là các số từ 0-6",
       });
     }
   }

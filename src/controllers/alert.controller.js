@@ -5,7 +5,7 @@ const Alert = require('../models/Alert');
 // @access  Public
 exports.getAllAlerts = async (req, res) => {
   try {
-    const { status, severity, limit = 50 } = req.query;
+    const { status, severity, limit = 50, page = 1 } = req.query;
 
     const query = {};
     if (status) {
@@ -23,9 +23,14 @@ exports.getAllAlerts = async (req, res) => {
       ]
     };
     const parsedLimit = parseInt(limit);
+    const parsedPage = Math.max(1, parseInt(page));
+    const skip = (parsedPage - 1) * parsedLimit;
 
     const [alerts, total] = await Promise.all([
-      Alert.find({ ...query, ...audienceFilter }).sort({ createdAt: -1 }).limit(parsedLimit),
+      Alert.find({ ...query, ...audienceFilter })
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parsedLimit),
       Alert.countDocuments({ ...query, ...audienceFilter })
     ]);
 
@@ -33,6 +38,8 @@ exports.getAllAlerts = async (req, res) => {
       success: true,
       count: alerts.length,
       total,
+      page: parsedPage,
+      pages: Math.ceil(total / parsedLimit),
       data: alerts
     });
 
