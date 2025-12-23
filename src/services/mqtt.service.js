@@ -3,6 +3,7 @@ const SensorData = require("../models/SensorData");
 const DeviceControl = require("../models/DeviceControl");
 const Alert = require("../models/Alert");
 const Threshold = require("../models/Threshold");
+const ESP32Status = require("../models/ESP32Status");
 
 class MQTTService {
   constructor() {
@@ -66,6 +67,8 @@ class MQTTService {
     const statusTopics = [
       `${this.topicPrefix}/status/pump`,
       `${this.topicPrefix}/status/connection`,
+      `${this.topicPrefix}/status/heartbeat`,
+      `${this.topicPrefix}/status/lwt`,
     ];
 
     statusTopics.forEach((topic) => {
@@ -91,6 +94,10 @@ class MQTTService {
         } else if (topic.includes("/status/")) {
           if (topic.endsWith("/request_thresholds")) {
             await this.publishThresholds();
+          } else if (topic.endsWith("/heartbeat")) {
+            await this.handleHeartbeat(payload);
+          } else if (topic.endsWith("/lwt")) {
+            await this.handleLWT(payload);
           } else {
             await this.handleStatusUpdate(topic, payload);
           }
@@ -171,6 +178,59 @@ class MQTTService {
       // Ví dụ: Nếu connection lost -> tạo alert
     } catch (error) {
       console.error("Error handling status:", error);
+    }
+  }
+
+  // Xử lý heartbeat từ ESP32
+  async handleHeartbeat(payload) {
+    try {
+      const data = JSON.parse(payload);
+      const deviceId = data.deviceId || "esp32_main";
+      const ipAddress = data.ip || null;
+
+      // Cập nhật hoặc tạo mới ESP32Status
+      await ESP32Status.findOneAndUpdate(
+        { deviceId },
+        {
+          status: "online",
+          lastSeen: new Date(),
+          ipAddress: ipAddress,
+        },
+        { upsert: true, new: true }
+      );
+
+      console.log(
+        `[Heartbeat] ESP32 (${deviceId}) is online - IP: ${ipAddress}`
+      );
+    } catch (error) {
+      console.error("Error handling heartbeat:", error);
+    }
+  }
+
+  // Xử lý Last Will and Testament (LWT) - ESP32 mất kết nối
+  async handleLWT(payload) {
+    try {
+      const data = JSON.parse(payload);
+      const deviceId = data.deviceId || "esp32_main";
+
+      await ESP32Status.findOneAndUpdate(
+        { deviceId },
+        { status: "offline" },
+        { upsert: true, new: true }
+      );
+
+      console.log(`[LWT] ESP32 (${deviceId}) went offline`);
+
+      // Tạo alert cảnh báo mất kết nối
+      await Alert.create({
+        type: "esp32_offline",
+        severity: "high",
+        title: "Mất kết nối ESP32",
+        message: `Thiết bị ESP32 (${deviceId}) đã mất kết nối`,
+        status: "active",
+      });
+    } catch (error) {
+      console.error("Error handling LWT:", error);
     }
   }
 
@@ -269,18 +329,30 @@ class MQTTService {
   }
 
   // Điều khiển thiết bị
-  async controlDevice(deviceName, status, controlledBy = 'manual', value = 0) {
+  async controlDevice(deviceName, status, controlledBy = "manual", value = 0) {
     try {
+      // Kiểm tra ESP32 còn online không (nếu là user hoặc schedule)
+      if (controlledBy === "manual" || controlledBy === "schedule") {
+        const esp32Status = await ESP32Status.findOne({
+          deviceId: "esp32_main",
+        });
+        if (!esp32Status || !esp32Status.isOnline()) {
+          console.warn(
+            `[Control] ESP32 is offline, cannot control ${deviceName}`
+          );
+          throw new Error("ESP32 đang offline, không thể điều khiển thiết bị");
+        }
+      }
+
       // Lưu vào database
       await DeviceControl.create({
         deviceName: deviceName,
         status,
         controlledBy,
-        value: value || 0
+        value: value || 0,
       });
 
-      // Publish lệnh xuống ESP32 using original deviceName so topics like
-      // farm/control/led1 still reach the ESP devices
+      // Publish lệnh xuống ESP32
       const topic = `${this.topicPrefix}/control/${deviceName}`;
       mqtt.publish(topic, status);
 
@@ -291,7 +363,7 @@ class MQTTService {
       return true;
     } catch (error) {
       console.error("Error controlling device:", error);
-      return false;
+      throw error;
     }
   }
 
