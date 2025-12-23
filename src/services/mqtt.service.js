@@ -34,9 +34,7 @@ class MQTTService {
       const thresholds = await Threshold.find({ isActive: true });
       const payload = thresholds.map((t) => ({
         sensorType: t.sensorType,
-        minValue: t.minValue,
-        maxValue: t.maxValue,
-        alertType: t.alertType,
+        thresholdValue: t.thresholdValue,
         severity: t.severity,
       }));
       const topic = `${this.topicPrefix}/config/thresholds`;
@@ -257,48 +255,31 @@ class MQTTService {
 
       let alert = null;
 
-      // Kiểm tra ngưỡng min (giá trị thấp)
-      if (
-        threshold.minValue !== undefined &&
-        (threshold.alertType === "low" || threshold.alertType === "both") &&
-        value < threshold.minValue
-      ) {
-        const titleMap = {
-          soil_moisture: "Độ ẩm đất thấp",
-          water_level: "Mực nước thấp",
-          temperature: "Nhiệt độ thấp",
-          humidity: "Độ ẩm không khí thấp",
-          light: "Ánh sáng yếu",
-        };
-
+      // Với mô hình mới: mỗi sensorType chỉ có 1 thresholdValue
+      // soil_moisture, light: thấp hơn ngưỡng -> cảnh báo
+      // temperature: cao hơn ngưỡng -> cảnh báo
+      if (sensorType === "soil_moisture" && value < threshold.thresholdValue) {
         alert = {
           type: `low_${sensorType}`,
           severity: threshold.severity,
-          title: titleMap[sensorType] || `${sensorType} thấp`,
-          message: `${sensorType} hiện tại ${value}, thấp hơn ngưỡng ${threshold.minValue}`,
+          title: "Độ ẩm đất thấp",
+          message: `Độ ẩm đất hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`,
           status: "active",
         };
-      }
-
-      // Kiểm tra ngưỡng max (giá trị cao)
-      if (
-        threshold.maxValue !== undefined &&
-        (threshold.alertType === "high" || threshold.alertType === "both") &&
-        value > threshold.maxValue
-      ) {
-        const titleMap = {
-          soil_moisture: "Độ ẩm đất cao",
-          water_level: "Mực nước cao",
-          temperature: "Nhiệt độ cao",
-          humidity: "Độ ẩm không khí cao",
-          light: "Ánh sáng mạnh",
+      } else if (sensorType === "light" && value < threshold.thresholdValue) {
+        alert = {
+          type: `low_${sensorType}`,
+          severity: threshold.severity,
+          title: "Ánh sáng yếu",
+          message: `Ánh sáng hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`,
+          status: "active",
         };
-
+      } else if (sensorType === "temperature" && value > threshold.thresholdValue) {
         alert = {
           type: `high_${sensorType}`,
           severity: threshold.severity,
-          title: titleMap[sensorType] || `${sensorType} cao`,
-          message: `${sensorType} hiện tại ${value}, vượt ngưỡng ${threshold.maxValue}`,
+          title: "Nhiệt độ cao",
+          message: `Nhiệt độ hiện tại ${value}, vượt ngưỡng ${threshold.thresholdValue}`,
           status: "active",
         };
       }
@@ -319,15 +300,31 @@ class MQTTService {
   // Logic tự động
   async autoControl(sensorType, value) {
     try {
-      // Tự động bật bơm nếu đất khô
-      if (sensorType === "soil_moisture" && value < 30) {
-        console.log("Độ ẩm đất thấp, tự động bật bơm...");
+      // Lấy threshold tương ứng (nếu có bật)
+      const threshold = await Threshold.findOne({
+        sensorType,
+        isActive: true,
+      });
+
+      if (!threshold) {
+        return;
+      }
+
+      // Độ ẩm đất thấp hơn ngưỡng -> bật bơm
+      if (sensorType === "soil_moisture" && value < threshold.thresholdValue) {
+        console.log("Độ ẩm đất thấp hơn ngưỡng, tự động bật bơm...");
         await this.controlDevice("pump", "ON", "auto");
       }
 
-      // Tự động bật quạt nếu nhiệt độ cao
-      if (sensorType === "temperature" && value > 35) {
-        console.log("Nhiệt độ cao, tự động bật quạt...");
+      // Ánh sáng thấp hơn ngưỡng -> bật đèn khu trồng trọt
+      if (sensorType === "light" && value < threshold.thresholdValue) {
+        console.log("Ánh sáng thấp hơn ngưỡng, tự động bật đèn...");
+        await this.controlDevice("led_farm", "ON", "auto");
+      }
+
+      // Nhiệt độ cao hơn ngưỡng -> bật quạt
+      if (sensorType === "temperature" && value > threshold.thresholdValue) {
+        console.log("Nhiệt độ cao hơn ngưỡng, tự động bật quạt...");
         await this.controlDevice("fan", "ON", "auto");
       }
     } catch (error) {

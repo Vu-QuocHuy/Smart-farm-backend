@@ -24,37 +24,54 @@ class ScheduleService {
     try {
       const now = new Date();
       const currentDay = now.getDay(); // 0=CN, 1=T2, ..., 6=T7
-      const currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-        now.getMinutes()
-      ).padStart(2, "0")}`;
+      const currentTime = `${String(now.getHours()).padStart(
+        2,
+        "0"
+      )}:${String(now.getMinutes()).padStart(2, "0")}`;
 
-      // Lấy các lịch enabled, có thời gian khớp và ngày trong tuần khớp
+      // Lấy các lịch enabled cho ngày hiện tại
       const schedules = await Schedule.find({
         enabled: true,
-        time: currentTime,
         daysOfWeek: currentDay,
       });
 
       if (schedules.length > 0) {
         console.log(
-          `[Schedule] Found ${schedules.length} schedule(s) to execute at ${currentTime}`
+          `[Schedule] Checking ${schedules.length} schedule(s) at ${currentTime}`
         );
       }
 
       for (const schedule of schedules) {
         try {
-          console.log(
-            `[Schedule] Executing: ${schedule.name} - ${schedule.deviceName} ${schedule.action}`
-          );
+          // Đến thời gian bắt đầu: thực hiện action (ví dụ: ON/AUTO)
+          if (currentTime === schedule.startTime) {
+            console.log(
+              `[Schedule] Start: ${schedule.name} - ${schedule.deviceName} ${schedule.action}`
+            );
 
-          // Gọi MQTT service để điều khiển thiết bị
-          await mqttService.controlDevice(
-            schedule.deviceName,
-            schedule.action,
-            "schedule"
-          );
+            await mqttService.controlDevice(
+              schedule.deviceName,
+              schedule.action,
+              "schedule"
+            );
 
-          console.log(`[Schedule] ✓ Successfully executed: ${schedule.name}`);
+            console.log(`[Schedule] ✓ Start executed: ${schedule.name}`);
+          }
+
+          // Đến thời gian kết thúc: luôn tắt thiết bị
+          if (currentTime === schedule.endTime) {
+            console.log(
+              `[Schedule] End: ${schedule.name} - ${schedule.deviceName} OFF`
+            );
+
+            await mqttService.controlDevice(
+              schedule.deviceName,
+              "OFF",
+              "schedule"
+            );
+
+            console.log(`[Schedule] ✓ End executed (OFF): ${schedule.name}`);
+          }
         } catch (error) {
           console.error(
             `[Schedule] ✗ Failed to execute ${schedule.name}:`,

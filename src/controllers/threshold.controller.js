@@ -54,6 +54,7 @@ exports.upsertThreshold = async (req, res) => {
   try {
     const { sensorType, minValue, maxValue, alertType, severity, isActive } =
       req.body;
+    const { sensorType, thresholdValue, severity, isActive } = req.body;
 
     // Kiểm tra logic
     if (
@@ -61,9 +62,11 @@ exports.upsertThreshold = async (req, res) => {
       maxValue !== undefined &&
       minValue >= maxValue
     ) {
+    if (!sensorType || thresholdValue === undefined) {
       return res.status(400).json({
         success: false,
         message: "Giá trị min phải nhỏ hơn max",
+        message: 'Thiếu sensorType hoặc thresholdValue'
       });
     }
 
@@ -72,9 +75,6 @@ exports.upsertThreshold = async (req, res) => {
       { sensorType },
       {
         sensorType,
-        minValue,
-        maxValue,
-        alertType,
         severity,
         isActive,
         updatedBy: req.user.userId,

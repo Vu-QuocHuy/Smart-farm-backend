@@ -8,7 +8,6 @@ const DeviceControlSchema = new mongoose.Schema(
       enum: [
         "pump",
         "fan",
-        "light",
         "servo_door",
         "servo_feed",
         "led_farm",

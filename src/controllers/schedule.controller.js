@@ -1,13 +1,23 @@
 const Schedule = require('../models/Schedule');
 
-// Kiểm tra lịch trùng: cùng device, cùng time và trùng ngày trong tuần
-const hasScheduleConflict = async ({ deviceName, time, daysOfWeek, excludeId }) => {
+// Kiểm tra lịch trùng: cùng device, khoảng thời gian giao nhau và trùng ngày trong tuần
+// Giả định: startTime < endTime, dạng HH:mm (đã được validate)
+const hasScheduleConflict = async ({
+  deviceName,
+  startTime,
+  endTime,
+  daysOfWeek,
+  excludeId,
+}) => {
   return Schedule.findOne({
     deviceName,
-    time,
     enabled: true,
     _id: { $ne: excludeId },
-    daysOfWeek: { $in: daysOfWeek || [] }
+    daysOfWeek: { $in: daysOfWeek || [] },
+    // Hai khoảng [startTime, endTime] giao nhau khi:
+    // existing.startTime < newEnd && existing.endTime > newStart
+    startTime: { $lt: endTime },
+    endTime: { $gt: startTime },
   });
 };
 
@@ -42,7 +52,8 @@ exports.createSchedule = async (req, res) => {
       name: req.body.name,
       deviceName: req.body.deviceName,
       action: req.body.action,
-      time: req.body.time,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
       daysOfWeek: req.body.daysOfWeek || [0,1,2,3,4,5,6],
       enabled: req.body.enabled !== undefined ? req.body.enabled : true,
     };
@@ -50,8 +61,9 @@ exports.createSchedule = async (req, res) => {
     if (payload.enabled) {
       const conflict = await hasScheduleConflict({
         deviceName: payload.deviceName,
-        time: payload.time,
-        daysOfWeek: payload.daysOfWeek
+        startTime: payload.startTime,
+        endTime: payload.endTime,
+        daysOfWeek: payload.daysOfWeek,
       });
       if (conflict) {
         return res.status(400).json({
@@ -97,7 +109,8 @@ exports.updateSchedule = async (req, res) => {
       name: req.body.name ?? schedule.name,
       deviceName: req.body.deviceName ?? schedule.deviceName,
       action: req.body.action ?? schedule.action,
-      time: req.body.time ?? schedule.time,
+      startTime: req.body.startTime ?? schedule.startTime,
+      endTime: req.body.endTime ?? schedule.endTime,
       daysOfWeek: req.body.daysOfWeek ?? schedule.daysOfWeek,
       enabled: req.body.enabled !== undefined ? req.body.enabled : schedule.enabled,
     };
@@ -105,7 +118,8 @@ exports.updateSchedule = async (req, res) => {
     if (updated.enabled) {
       const conflict = await hasScheduleConflict({
         deviceName: updated.deviceName,
-        time: updated.time,
+        startTime: updated.startTime,
+        endTime: updated.endTime,
         daysOfWeek: updated.daysOfWeek,
         excludeId: schedule._id
       });
@@ -181,9 +195,10 @@ exports.toggleSchedule = async (req, res) => {
     if (!schedule.enabled) {
       const conflict = await hasScheduleConflict({
         deviceName: schedule.deviceName,
-        time: schedule.time,
+        startTime: schedule.startTime,
+        endTime: schedule.endTime,
         daysOfWeek: schedule.daysOfWeek,
-        excludeId: schedule._id
+        excludeId: schedule._id,
       });
       if (conflict) {
         return res.status(400).json({
