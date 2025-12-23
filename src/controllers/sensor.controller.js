@@ -89,10 +89,31 @@ exports.getSensorHistory = async (req, res) => {
       .sort({ createdAt: 1 })  // Sắp xếp tăng dần (cũ -> mới)
       .limit(2000);  // Giới hạn để tránh trả quá nhiều điểm
 
+    // Calculate statistics
+    let stats = {
+      min: null,
+      max: null,
+      avg: null,
+    };
+
+    if (history.length > 0) {
+      const values = history.map(item => item.value).filter(v => v != null);
+      if (values.length > 0) {
+        stats.min = Math.min(...values);
+        stats.max = Math.max(...values);
+        stats.avg = values.reduce((sum, val) => sum + val, 0) / values.length;
+      }
+    }
+
     res.status(200).json({
       success: true,
       count: history.length,
       data: history,
+      stats: {
+        min: stats.min,
+        max: stats.max,
+        avg: stats.avg ? parseFloat(stats.avg.toFixed(2)) : null,
+      },
       range: {
         start: startTime,
         end: endTime
