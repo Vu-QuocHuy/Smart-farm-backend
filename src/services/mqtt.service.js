@@ -141,7 +141,7 @@ class MQTTService {
         humidity: "%",
         soil_moisture: "%",
         water_level: "cm",
-        light: "lux",
+        light: "%",
       };
 
       // Lưu vào database

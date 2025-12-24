@@ -65,10 +65,11 @@ exports.upsertThreshold = async (req, res) => {
       { sensorType },
       {
         sensorType,
+        thresholdValue,
         severity,
         isActive,
-        updatedBy: req.user.userId,
-        createdBy: req.user.userId // Chỉ set khi tạo mới
+        updatedBy: req.user._id || req.user.id,
+        createdBy: req.user._id || req.user.id // Chỉ set khi tạo mới
       },
       {
         new: true,
@@ -125,7 +126,7 @@ exports.toggleThreshold = async (req, res) => {
 
     const threshold = await Threshold.findOneAndUpdate(
       { sensorType },
-      { isActive, updatedBy: req.user.userId },
+      { isActive, updatedBy: req.user._id || req.user.id },
       { new: true }
     );
 

@@ -18,7 +18,7 @@ exports.getAllAlerts = async (req, res) => {
     const audienceFilter = {
       $or: [
         { targetAll: { $ne: false } },
-        { targetUsers: req.user.userId },
+        { targetUsers: req.user._id || req.user.id },
         { targetUsers: { $exists: false } }
       ]
     };
@@ -63,8 +63,8 @@ exports.resolveAlert = async (req, res) => {
       resolvedAt: new Date(),
     };
 
-    if (req.user && req.user.userId) {
-      updateData.resolvedBy = req.user.userId;
+    if (req.user && (req.user._id || req.user.id)) {
+      updateData.resolvedBy = req.user._id || req.user.id;
     }
 
     const alert = await Alert.findByIdAndUpdate(
@@ -177,7 +177,7 @@ exports.createAlert = async (req, res) => {
       targetAll,
       targetUsers: targetAll ? [] : targetUsers,
       data,
-      createdBy: req.user.userId
+      createdBy: req.user._id || req.user.id
     });
 
     res.status(201).json({

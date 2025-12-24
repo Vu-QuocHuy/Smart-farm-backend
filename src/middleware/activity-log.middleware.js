@@ -8,13 +8,14 @@ const logActivity = (action, resourceType = null) => {
 
     // Override res.json để bắt kết quả
     res.json = function(data) {
-      // Chỉ log nếu có userId (đã authenticate)
-      if (req.user && req.user.userId) {
+      // Chỉ log nếu có user (đã authenticate)
+      if (req.user && (req.user._id || req.user.id)) {
+        const userId = req.user._id || req.user.id;
         const logData = {
-          userId: req.user.userId,
+          userId: userId,
           action: action,
           resourceType: resourceType,
-        status: res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failed'
+          status: res.statusCode >= 200 && res.statusCode < 300 ? 'success' : 'failed'
         };
 
         // Lưu resourceId nếu có trong params
