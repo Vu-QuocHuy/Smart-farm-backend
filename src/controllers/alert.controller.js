@@ -1,4 +1,5 @@
 const Alert = require("../models/Alert");
+const mongoose = require("mongoose");
 
 // @desc    Lấy tất cả cảnh báo
 // @route   GET /api/alerts?status=active&limit=50
@@ -18,17 +19,22 @@ exports.getAllAlerts = async (req, res) => {
     // - targetAll = true: tất cả user thấy
     // - targetAll = false và targetUsers chứa user hiện tại: user thấy
     // - targetAll không tồn tại (alert tự động): tất cả user thấy
-    const userId = req.user?._id || req.user?.id;
-    const audienceFilter = {
-      $or: [
-        { targetAll: true },
-        { targetAll: { $exists: false } }, // Alert tự động (không có targetAll)
-        { 
-          targetAll: false,
-          targetUsers: userId 
-        },
-      ],
-    };
+    const userId = req.user?._id || req.user?.id || req.user?.userId;
+    const canTargetUser = !!userId && mongoose.Types.ObjectId.isValid(userId);
+
+    const audienceOr = [
+      { targetAll: true },
+      { targetAll: { $exists: false } }, // Alert tự động (không có targetAll)
+    ];
+
+    if (canTargetUser) {
+      audienceOr.push({
+        targetAll: false,
+        targetUsers: userId,
+      });
+    }
+
+    const audienceFilter = { $or: audienceOr };
     const parsedLimit = parseInt(limit);
     const parsedPage = Math.max(1, parseInt(page));
     const skip = (parsedPage - 1) * parsedLimit;
@@ -188,6 +194,17 @@ exports.createAlert = async (req, res) => {
       data: alert,
     });
   } catch (error) {
+    // Most common cause: schema enum mismatch (e.g., manual_notice not allowed)
+    if (
+      error &&
+      (error.name === "ValidationError" || error.name === "CastError")
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Dữ liệu không hợp lệ khi tạo thông báo",
+        error: error.message,
+      });
+    }
     res.status(500).json({
       success: false,
       message: "Lỗi khi tạo thông báo",

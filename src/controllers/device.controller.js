@@ -70,17 +70,13 @@ exports.getDeviceStatus = async (req, res) => {
       status[device] = latest ? latest.status : "OFF";
     }
 
-    // Tính trạng thái "light" (Đèn tất cả) từ 3 đèn con để UI hiển thị đúng
+    // Logic "Đèn (Tất cả)":
+    // - Chỉ đổi trạng thái khi CẢ 3 đèn con giống nhau (ON/OFF/AUTO)
+    // - Nếu 1-2 đèn khác nhau, giữ nguyên trạng thái "light" trước đó
     const group = [status.led_farm, status.led_animal, status.led_hallway];
     const unique = Array.from(new Set(group));
     if (unique.length === 1) {
       status.light = unique[0];
-    } else if (unique.includes("AUTO")) {
-      status.light = "AUTO";
-    } else if (unique.includes("ON")) {
-      status.light = "ON";
-    } else {
-      status.light = "OFF";
     }
 
     res.status(200).json({

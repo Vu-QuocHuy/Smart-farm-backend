@@ -6,6 +6,9 @@ const AlertSchema = new mongoose.Schema(
       type: String,
       required: true,
       enum: [
+        // Admin manual alerts
+        "manual_notice",
+        "manual_report",
         "low_soil_moisture",
         "high_soil_moisture",
         "low_water_level",

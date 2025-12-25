@@ -1,21 +1,22 @@
-const Threshold = require('../models/Threshold');
+const Threshold = require("../models/Threshold");
+const mqttService = require("../services/mqtt.service");
 
 // Lấy tất cả ngưỡng cảnh báo
 exports.getAllThresholds = async (req, res) => {
   try {
     const thresholds = await Threshold.find()
-      .populate('createdBy', 'username')
-      .populate('updatedBy', 'username')
+      .populate("createdBy", "username")
+      .populate("updatedBy", "username")
       .sort({ sensorType: 1 });
 
     res.status(200).json({
       success: true,
-      data: thresholds
+      data: thresholds,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -26,24 +27,24 @@ exports.getThresholdBySensor = async (req, res) => {
     const { sensorType } = req.params;
 
     const threshold = await Threshold.findOne({ sensorType, isActive: true })
-      .populate('createdBy', 'username')
-      .populate('updatedBy', 'username');
+      .populate("createdBy", "username")
+      .populate("updatedBy", "username");
 
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng cho loại cảm biến này'
+        message: "Không tìm thấy ngưỡng cho loại cảm biến này",
       });
     }
 
     res.status(200).json({
       success: true,
-      data: threshold
+      data: threshold,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -79,30 +80,37 @@ exports.upsertThreshold = async (req, res) => {
     const threshold = await Threshold.findOneAndUpdate(
       { sensorType: effectiveSensorType },
       {
-        sensorType,
+        sensorType: effectiveSensorType,
         thresholdValue,
         severity,
         isActive,
         updatedBy: req.user._id || req.user.id,
-        createdBy: req.user._id || req.user.id // Chỉ set khi tạo mới
+        createdBy: req.user._id || req.user.id, // Chỉ set khi tạo mới
       },
       {
         new: true,
         upsert: true,
         setDefaultsOnInsert: true,
-        runValidators: true
+        runValidators: true,
       }
     );
 
     res.status(200).json({
       success: true,
-      message: 'Cập nhật ngưỡng cảnh báo thành công',
-      data: threshold
+      message: "Cập nhật ngưỡng cảnh báo thành công",
+      data: threshold,
     });
+
+    // Publish thresholds ngay để ESP32 nhận được (retained)
+    mqttService
+      .publishThresholds()
+      .catch((err) =>
+        console.error("Publish thresholds after upsert error:", err)
+      );
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -117,18 +125,25 @@ exports.deleteThreshold = async (req, res) => {
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng'
+        message: "Không tìm thấy ngưỡng",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Xóa ngưỡng thành công'
+      message: "Xóa ngưỡng thành công",
     });
+
+    // Publish thresholds ngay để ESP32 nhận được (retained)
+    mqttService
+      .publishThresholds()
+      .catch((err) =>
+        console.error("Publish thresholds after delete error:", err)
+      );
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
@@ -150,19 +165,26 @@ exports.toggleThreshold = async (req, res) => {
     if (!threshold) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy ngưỡng'
+        message: "Không tìm thấy ngưỡng",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: `${isActive ? 'Bật' : 'Tắt'} ngưỡng thành công`,
-      data: threshold
+      message: `${isActive ? "Bật" : "Tắt"} ngưỡng thành công`,
+      data: threshold,
     });
+
+    // Publish thresholds ngay để ESP32 nhận được (retained)
+    mqttService
+      .publishThresholds()
+      .catch((err) =>
+        console.error("Publish thresholds after toggle error:", err)
+      );
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: error.message
+      message: error.message,
     });
   }
 };
