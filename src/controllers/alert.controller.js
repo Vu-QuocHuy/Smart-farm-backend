@@ -1,4 +1,4 @@
-const Alert = require('../models/Alert');
+const Alert = require("../models/Alert");
 
 // @desc    Lấy tất cả cảnh báo
 // @route   GET /api/alerts?status=active&limit=50
@@ -18,9 +18,9 @@ exports.getAllAlerts = async (req, res) => {
     const audienceFilter = {
       $or: [
         { targetAll: { $ne: false } },
-        { targetUsers: req.user.userId },
-        { targetUsers: { $exists: false } }
-      ]
+        { targetUsers: req.user?._id || req.user?.id },
+        { targetUsers: { $exists: false } },
+      ],
     };
     const parsedLimit = parseInt(limit);
     const parsedPage = Math.max(1, parseInt(page));
@@ -31,7 +31,7 @@ exports.getAllAlerts = async (req, res) => {
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parsedLimit),
-      Alert.countDocuments({ ...query, ...audienceFilter })
+      Alert.countDocuments({ ...query, ...audienceFilter }),
     ]);
 
     res.status(200).json({
@@ -40,14 +40,13 @@ exports.getAllAlerts = async (req, res) => {
       total,
       page: parsedPage,
       pages: Math.ceil(total / parsedLimit),
-      data: alerts
+      data: alerts,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi lấy cảnh báo',
-      error: error.message
+      message: "Lỗi khi lấy cảnh báo",
+      error: error.message,
     });
   }
 };
@@ -58,39 +57,36 @@ exports.getAllAlerts = async (req, res) => {
 exports.resolveAlert = async (req, res) => {
   try {
     const updateData = {
-      status: 'resolved',
+      status: "resolved",
       autoResolved: false,
       resolvedAt: new Date(),
     };
 
-    if (req.user && req.user.userId) {
-      updateData.resolvedBy = req.user.userId;
+    if (req.user) {
+      updateData.resolvedBy = req.user?._id || req.user?.id;
     }
 
-    const alert = await Alert.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true }
-    );
+    const alert = await Alert.findByIdAndUpdate(req.params.id, updateData, {
+      new: true,
+    });
 
     if (!alert) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy cảnh báo'
+        message: "Không tìm thấy cảnh báo",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Đã giải quyết cảnh báo',
-      data: alert
+      message: "Đã giải quyết cảnh báo",
+      data: alert,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi cập nhật',
-      error: error.message
+      message: "Lỗi khi cập nhật",
+      error: error.message,
     });
   }
 };
@@ -105,22 +101,22 @@ exports.autoResolveAlert = async (req, res) => {
     if (!type) {
       return res.status(400).json({
         success: false,
-        message: 'Thiếu type để auto-resolve'
+        message: "Thiếu type để auto-resolve",
       });
     }
 
     // Tìm alert đang active theo type (và deviceName nếu có)
-    const query = { status: 'active', type };
+    const query = { status: "active", type };
     if (deviceName) {
-      query['data.deviceName'] = deviceName;
+      query["data.deviceName"] = deviceName;
     }
 
     const alert = await Alert.findOneAndUpdate(
       query,
       {
-        status: 'resolved',
+        status: "resolved",
         autoResolved: true,
-        resolvedAt: new Date()
+        resolvedAt: new Date(),
       },
       { new: true }
     );
@@ -128,20 +124,20 @@ exports.autoResolveAlert = async (req, res) => {
     if (!alert) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy cảnh báo active để auto-resolve'
+        message: "Không tìm thấy cảnh báo active để auto-resolve",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Đã auto-resolve cảnh báo',
-      data: alert
+      message: "Đã auto-resolve cảnh báo",
+      data: alert,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi auto-resolve',
-      error: error.message
+      message: "Lỗi khi auto-resolve",
+      error: error.message,
     });
   }
 };
@@ -154,17 +150,17 @@ exports.createAlert = async (req, res) => {
     const {
       title,
       message,
-      type = 'manual_notice',
-      severity = 'info',
+      type = "manual_notice",
+      severity = "info",
       targetAll = true,
       targetUsers = [],
-      data = {}
+      data = {},
     } = req.body;
 
     if (!title || !message) {
       return res.status(400).json({
         success: false,
-        message: 'Thiếu title hoặc message'
+        message: "Thiếu title hoặc message",
       });
     }
 
@@ -173,22 +169,22 @@ exports.createAlert = async (req, res) => {
       message,
       type,
       severity,
-      status: 'active',
+      status: "active",
       targetAll,
       targetUsers: targetAll ? [] : targetUsers,
       data,
-      createdBy: req.user.userId
+      createdBy: req.user?._id || req.user?.id,
     });
 
     res.status(201).json({
       success: true,
-      data: alert
+      data: alert,
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi tạo thông báo',
-      error: error.message
+      message: "Lỗi khi tạo thông báo",
+      error: error.message,
     });
   }
 };
@@ -203,20 +199,19 @@ exports.deleteAlert = async (req, res) => {
     if (!alert) {
       return res.status(404).json({
         success: false,
-        message: 'Không tìm thấy cảnh báo'
+        message: "Không tìm thấy cảnh báo",
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Đã xóa cảnh báo'
+      message: "Đã xóa cảnh báo",
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi khi xóa',
-      error: error.message
+      message: "Lỗi khi xóa",
+      error: error.message,
     });
   }
 };

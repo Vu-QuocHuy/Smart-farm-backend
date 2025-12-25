@@ -10,6 +10,27 @@ class MQTTService {
     this.topicPrefix = process.env.MQTT_TOPIC_PREFIX || "farm";
   }
 
+  publishRawCommand(deviceName, payload) {
+    const topic = `${this.topicPrefix}/control/${deviceName}`;
+    mqtt.publish(topic, payload);
+    console.log(`Published raw command: ${deviceName} -> ${payload}`);
+  }
+
+  async controlDeviceIfChanged(
+    deviceName,
+    status,
+    controlledBy = "auto",
+    value = 0
+  ) {
+    const last = await DeviceControl.findOne({ deviceName }).sort({
+      createdAt: -1,
+    });
+    if (last && last.status === status) {
+      return;
+    }
+    await this.controlDevice(deviceName, status, controlledBy, value);
+  }
+
   // Khởi động MQTT service
   start() {
     console.log("Starting MQTT Service...");
@@ -17,13 +38,16 @@ class MQTTService {
     // Kết nối MQTT
     mqtt.connect();
 
+    // Publish thresholds ngay sau khi MQTT kết nối thành công
+    mqtt.client?.on("connect", () => {
+      this.publishThresholds().catch((err) =>
+        console.error("Publish thresholds error:", err)
+      );
+    });
+
     // Subscribe các topics từ ESP32
     this.subscribeToSensorTopics();
     this.subscribeToStatusTopics();
-    // Publish thresholds to devices on startup
-    this.publishThresholds().catch((err) =>
-      console.error("Publish thresholds error:", err)
-    );
 
     // Xử lý messages
     this.handleMessages();
@@ -41,7 +65,7 @@ class MQTTService {
       const payloadStr = JSON.stringify(payload);
 
       // Publish với retained flag để ESP32 nhận được ngay khi kết nối
-      mqtt.publish(topic, payloadStr, { retained: true });
+      mqtt.publish(topic, payloadStr, { retain: true });
 
       console.log("Published thresholds to MQTT (retained):");
       console.log(`  Topic: ${topic}`);
@@ -71,7 +95,13 @@ class MQTTService {
   subscribeToStatusTopics() {
     const statusTopics = [
       `${this.topicPrefix}/status/pump`,
+      `${this.topicPrefix}/status/fan`,
+      `${this.topicPrefix}/status/light`,
+      `${this.topicPrefix}/status/led_farm`,
+      `${this.topicPrefix}/status/led_animal`,
+      `${this.topicPrefix}/status/led_hallway`,
       `${this.topicPrefix}/status/connection`,
+      `${this.topicPrefix}/status/request_thresholds`,
       `${this.topicPrefix}/status/heartbeat`,
       `${this.topicPrefix}/status/lwt`,
     ];
@@ -83,7 +113,7 @@ class MQTTService {
 
   // Xử lý messages nhận được
   handleMessages() {
-    mqtt.client.on("message", async (topic, message) => {
+    mqtt.client.on("message", async (topic, message, packet) => {
       try {
         const payload = message.toString();
 
@@ -102,7 +132,7 @@ class MQTTService {
           } else if (topic.endsWith("/heartbeat")) {
             await this.handleHeartbeat(payload);
           } else if (topic.endsWith("/lwt")) {
-            await this.handleLWT(payload);
+            await this.handleLWT(payload, { retained: !!packet?.retain });
           } else {
             await this.handleStatusUpdate(topic, payload);
           }
@@ -178,9 +208,10 @@ class MQTTService {
       const deviceName = topic.split("/").pop(); // pump, connection...
 
       console.log(`Status update: ${deviceName} -> ${payload}`);
-
-      // Có thể lưu vào log hoặc xử lý logic khác
-      // Ví dụ: Nếu connection lost -> tạo alert
+      // NOTE:
+      // Không ghi trạng thái runtime (ON/OFF) từ ESP32 vào DeviceControl.
+      // DeviceControl dùng để lưu MODE điều khiển (AUTO vs manual) và lịch sử lệnh.
+      // Nếu ghi đè bằng runtime ON/OFF, sẽ làm hỏng logic "manual override" và schedule.
     } catch (error) {
       console.error("Error handling status:", error);
     }
@@ -213,7 +244,7 @@ class MQTTService {
   }
 
   // Xử lý Last Will and Testament (LWT) - ESP32 mất kết nối
-  async handleLWT(payload) {
+  async handleLWT(payload, { retained } = {}) {
     try {
       const data = JSON.parse(payload);
       const deviceId = data.deviceId || "esp32_main";
@@ -226,13 +257,37 @@ class MQTTService {
 
       console.log(`[LWT] ESP32 (${deviceId}) went offline`);
 
+      // Khi backend vừa subscribe, broker có thể gửi retained LWT (offline) từ lần trước.
+      // Trường hợp này chỉ nên cập nhật trạng thái, tránh tạo cảnh báo sai/spam.
+      if (retained) {
+        console.log(
+          `[LWT] Ignored retained offline LWT for deviceId=${deviceId} (startup/subscription replay)`
+        );
+        return;
+      }
+
+      // Tránh tạo trùng alert nếu đã có 1 alert mất kết nối đang active
+      const existing = await Alert.findOne({
+        type: "connection_lost",
+        status: "active",
+        "data.deviceId": deviceId,
+      });
+
+      if (existing) {
+        return;
+      }
+
       // Tạo alert cảnh báo mất kết nối
       await Alert.create({
-        type: "esp32_offline",
-        severity: "high",
+        type: "connection_lost",
+        severity: "critical",
         title: "Mất kết nối ESP32",
         message: `Thiết bị ESP32 (${deviceId}) đã mất kết nối`,
         status: "active",
+        data: {
+          deviceId,
+          source: "lwt",
+        },
       });
     } catch (error) {
       console.error("Error handling LWT:", error);
@@ -274,7 +329,10 @@ class MQTTService {
           message: `Ánh sáng hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`,
           status: "active",
         };
-      } else if (sensorType === "temperature" && value > threshold.thresholdValue) {
+      } else if (
+        sensorType === "temperature" &&
+        value > threshold.thresholdValue
+      ) {
         alert = {
           type: `high_${sensorType}`,
           severity: threshold.severity,
@@ -300,6 +358,13 @@ class MQTTService {
   // Logic tự động
   async autoControl(sensorType, value) {
     try {
+      // Mặc định để ESP32 tự xử lý auto-control (phản ứng nhanh hơn).
+      // Chỉ bật auto-control phía backend nếu set env AUTO_CONTROL_MODE=backend
+      const mode = process.env.AUTO_CONTROL_MODE || "esp32";
+      if (mode !== "backend") {
+        return;
+      }
+
       // Lấy threshold tương ứng (nếu có bật)
       const threshold = await Threshold.findOne({
         sensorType,
@@ -310,22 +375,34 @@ class MQTTService {
         return;
       }
 
-      // Độ ẩm đất thấp hơn ngưỡng -> bật bơm
-      if (sensorType === "soil_moisture" && value < threshold.thresholdValue) {
-        console.log("Độ ẩm đất thấp hơn ngưỡng, tự động bật bơm...");
-        await this.controlDevice("pump", "ON", "auto");
+      // Độ ẩm đất thấp hơn ngưỡng -> bật bơm, ngược lại -> tắt bơm
+      if (sensorType === "soil_moisture") {
+        if (value < threshold.thresholdValue) {
+          console.log("Độ ẩm đất thấp hơn ngưỡng, tự động bật bơm...");
+          await this.controlDeviceIfChanged("pump", "ON", "auto");
+        } else {
+          await this.controlDeviceIfChanged("pump", "OFF", "auto");
+        }
       }
 
-      // Ánh sáng thấp hơn ngưỡng -> bật đèn khu trồng trọt
-      if (sensorType === "light" && value < threshold.thresholdValue) {
-        console.log("Ánh sáng thấp hơn ngưỡng, tự động bật đèn...");
-        await this.controlDevice("led_farm", "ON", "auto");
+      // Ánh sáng thấp hơn ngưỡng -> bật đèn khu trồng trọt, ngược lại -> tắt
+      if (sensorType === "light") {
+        if (value < threshold.thresholdValue) {
+          console.log("Ánh sáng thấp hơn ngưỡng, tự động bật đèn...");
+          await this.controlDeviceIfChanged("led_farm", "ON", "auto");
+        } else {
+          await this.controlDeviceIfChanged("led_farm", "OFF", "auto");
+        }
       }
 
-      // Nhiệt độ cao hơn ngưỡng -> bật quạt
-      if (sensorType === "temperature" && value > threshold.thresholdValue) {
-        console.log("Nhiệt độ cao hơn ngưỡng, tự động bật quạt...");
-        await this.controlDevice("fan", "ON", "auto");
+      // Nhiệt độ cao hơn ngưỡng -> bật quạt, ngược lại -> tắt quạt
+      if (sensorType === "temperature") {
+        if (value > threshold.thresholdValue) {
+          console.log("Nhiệt độ cao hơn ngưỡng, tự động bật quạt...");
+          await this.controlDeviceIfChanged("fan", "ON", "auto");
+        } else {
+          await this.controlDeviceIfChanged("fan", "OFF", "auto");
+        }
       }
     } catch (error) {
       console.error("Error in auto control:", error);
@@ -348,20 +425,46 @@ class MQTTService {
         }
       }
 
+      const isServoAction =
+        deviceName === "servo_door" || deviceName === "servo_feed";
+
+      // Servo là "action":
+      // - AUTO/OFF dùng để bật/tắt chế độ cho phép lịch trình (auto)
+      // - ON dùng để RUN 1 chu kỳ, không thay đổi trạng thái AUTO/OFF đang có
+      let storedStatus = status;
+      let commandPayload = status;
+
+      if (isServoAction) {
+        if (status === "AUTO") {
+          storedStatus = "AUTO";
+          commandPayload = "AUTO";
+        } else if (status === "OFF") {
+          storedStatus = "OFF";
+          commandPayload = "OFF";
+        } else if (status === "ON") {
+          // RUN 1 lần, giữ nguyên mode hiện tại (AUTO/OFF)
+          const last = await DeviceControl.findOne({ deviceName }).sort({
+            createdAt: -1,
+          });
+          storedStatus = last?.status || "OFF";
+          commandPayload = "RUN";
+        }
+      }
+
       // Lưu vào database
       await DeviceControl.create({
         deviceName: deviceName,
-        status,
+        status: storedStatus,
         controlledBy,
         value: value || 0,
       });
 
       // Publish lệnh xuống ESP32
       const topic = `${this.topicPrefix}/control/${deviceName}`;
-      mqtt.publish(topic, status);
+      mqtt.publish(topic, commandPayload);
 
       console.log(
-        `Device control: ${deviceName} -> ${status} (saved as ${deviceName}, by ${controlledBy})`
+        `Device control: ${deviceName} -> ${commandPayload} (stored=${storedStatus}, by ${controlledBy})`
       );
 
       return true;

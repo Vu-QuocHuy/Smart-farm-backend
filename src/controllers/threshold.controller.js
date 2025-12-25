@@ -53,23 +53,43 @@ exports.getThresholdBySensor = async (req, res) => {
 exports.upsertThreshold = async (req, res) => {
   try {
     const { sensorType, thresholdValue, severity, isActive } = req.body;
-    if (!sensorType || thresholdValue === undefined) {
+    const sensorTypeFromParams = req.params.sensorType;
+    const effectiveSensorType = sensorTypeFromParams || sensorType;
+
+    if (!effectiveSensorType || thresholdValue === undefined) {
       return res.status(400).json({
         success: false,
-        message: "Giá trị min phải nhỏ hơn max",
         message: "Thiếu sensorType hoặc thresholdValue",
       });
     }
 
+    if (
+      sensorTypeFromParams &&
+      sensorType &&
+      sensorTypeFromParams !== sensorType
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "sensorType trong URL và body không khớp",
+      });
+    }
+
+    const userId = req.user?._id || req.user?.id;
+
     // Tìm và cập nhật hoặc tạo mới
     const threshold = await Threshold.findOneAndUpdate(
-      { sensorType },
+      { sensorType: effectiveSensorType },
       {
-        sensorType,
-        severity,
-        isActive,
-        updatedBy: req.user.userId,
-        createdBy: req.user.userId, // Chỉ set khi tầo mới
+        $set: {
+          sensorType: effectiveSensorType,
+          thresholdValue,
+          severity,
+          isActive,
+          updatedBy: userId,
+        },
+        $setOnInsert: {
+          createdBy: userId,
+        },
       },
       {
         new: true,
@@ -132,9 +152,11 @@ exports.toggleThreshold = async (req, res) => {
     const { sensorType } = req.params;
     const { isActive } = req.body;
 
+    const userId = req.user?._id || req.user?.id;
+
     const threshold = await Threshold.findOneAndUpdate(
       { sensorType },
-      { isActive, updatedBy: req.user.userId },
+      { isActive, updatedBy: userId },
       { new: true }
     );
 

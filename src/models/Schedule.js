@@ -1,4 +1,4 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const ScheduleSchema = new mongoose.Schema(
   {
@@ -14,6 +14,7 @@ const ScheduleSchema = new mongoose.Schema(
     action: {
       type: String,
       required: true,
+      enum: ["ON", "OFF", "RUN", "AUTO"],
     },
     // Thời gian bắt đầu (HH:mm)
     startTime: {
@@ -45,4 +46,4 @@ const ScheduleSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-module.exports = mongoose.model('Schedule', ScheduleSchema);
+module.exports = mongoose.model("Schedule", ScheduleSchema);
