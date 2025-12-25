@@ -3,6 +3,23 @@ const User = require('../models/User');
 const Schedule = require('../models/Schedule');
 const Threshold = require('../models/Threshold');
 
+// Mapping tên thiết bị sang tiếng Việt
+const deviceNameMap = {
+  'pump': 'Bơm nước',
+  'fan': 'Quạt',
+  'light': 'Đèn (Tất cả)',
+  'servo_door': 'Cửa ra vào (Servo)',
+  'servo_feed': 'Cho ăn (Servo)',
+  'led_farm': 'Đèn trồng cây',
+  'led_animal': 'Đèn khu vật nuôi',
+  'led_hallway': 'Đèn hành lang'
+};
+
+// Helper function để map tên thiết bị sang tiếng Việt
+const getDeviceNameInVietnamese = (deviceName) => {
+  return deviceNameMap[deviceName] || deviceName;
+};
+
 // Helper function để lấy tên đối tượng
 const getResourceName = async (log) => {
   // Nếu có tên trong details, ưu tiên sử dụng
@@ -14,7 +31,7 @@ const getResourceName = async (log) => {
       return log.details.name;
     }
     if (log.resourceType === 'device' && log.details.deviceName) {
-      return log.details.deviceName;
+      return getDeviceNameInVietnamese(log.details.deviceName);
     }
     if (log.resourceType === 'threshold' && log.details.sensorType) {
       const sensorTypeMap = {
@@ -37,19 +54,41 @@ const getResourceName = async (log) => {
           const schedule = await Schedule.findById(log.resourceId).select('name');
           return schedule ? schedule.name : log.resourceId;
         case 'threshold':
-          const threshold = await Threshold.findById(log.resourceId).select('sensorType');
-          if (threshold) {
-            const sensorTypeMap = {
-              'temperature': 'Nhiệt độ',
-              'soil_moisture': 'Độ ẩm đất',
-              'light': 'Ánh sáng'
-            };
-            return sensorTypeMap[threshold.sensorType] || threshold.sensorType;
+          // Threshold có thể có resourceId là sensorType (string) hoặc ObjectId
+          // Thử tìm theo sensorType trước (vì route dùng sensorType làm param)
+          const sensorTypeMap = {
+            'temperature': 'Nhiệt độ',
+            'soil_moisture': 'Độ ẩm đất',
+            'light': 'Ánh sáng'
+          };
+          
+          // Nếu resourceId là một sensorType hợp lệ
+          if (sensorTypeMap[log.resourceId]) {
+            return sensorTypeMap[log.resourceId];
           }
+          
+          // Thử tìm theo ObjectId
+          try {
+            const threshold = await Threshold.findById(log.resourceId).select('sensorType');
+            if (threshold) {
+              return sensorTypeMap[threshold.sensorType] || threshold.sensorType;
+            }
+          } catch (error) {
+            // Không phải ObjectId hợp lệ, có thể là sensorType string
+            // Đã xử lý ở trên
+          }
+          
+          // Fallback: thử tìm theo sensorType trong collection
+          const thresholdByType = await Threshold.findOne({ sensorType: log.resourceId }).select('sensorType');
+          if (thresholdByType) {
+            return sensorTypeMap[thresholdByType.sensorType] || thresholdByType.sensorType;
+          }
+          
           return log.resourceId;
         case 'device':
           // Device không có model riêng, lấy từ details hoặc resourceId
-          return log.details?.deviceName || log.resourceId;
+          const deviceName = log.details?.deviceName || log.resourceId;
+          return getDeviceNameInVietnamese(deviceName);
         default:
           return log.resourceId;
       }
@@ -103,7 +142,9 @@ exports.getAllLogs = async (req, res) => {
     const logsWithResourceName = await Promise.all(
       logs.map(async (log) => {
         const logObj = log.toObject();
-        logObj.resourceName = await getResourceName(logObj);
+        const resourceName = await getResourceName(logObj);
+        // Nếu không tìm thấy tên, sử dụng resourceId hoặc '-'
+        logObj.resourceName = resourceName || logObj.resourceId || '-';
         return logObj;
       })
     );

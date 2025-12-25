@@ -14,12 +14,19 @@ exports.getAllAlerts = async (req, res) => {
     if (severity) {
       query.severity = severity;
     }
-    // Filter theo đối tượng nhận: targetAll hoặc targetUsers chứa user hiện tại hoặc không có targetUsers
+    // Filter theo đối tượng nhận:
+    // - targetAll = true: tất cả user thấy
+    // - targetAll = false và targetUsers chứa user hiện tại: user thấy
+    // - targetAll không tồn tại (alert tự động): tất cả user thấy
+    const userId = req.user?._id || req.user?.id;
     const audienceFilter = {
       $or: [
-        { targetAll: { $ne: false } },
-        { targetUsers: req.user?._id || req.user?.id },
-        { targetUsers: { $exists: false } },
+        { targetAll: true },
+        { targetAll: { $exists: false } }, // Alert tự động (không có targetAll)
+        { 
+          targetAll: false,
+          targetUsers: userId 
+        },
       ],
     };
     const parsedLimit = parseInt(limit);

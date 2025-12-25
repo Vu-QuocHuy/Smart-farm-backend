@@ -8,7 +8,7 @@ const crypto = require('crypto');
 // @access  Public
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { username, email, password, role, phone, address } = req.body;
 
     // Check user đã tồn tại
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
@@ -23,12 +23,18 @@ exports.register = async (req, res) => {
     }
 
     // Tạo user mới (password sẽ tự động hash trong model)
-    const user = await User.create({ 
+    const userData = { 
       username, 
       email, 
       password,
       role: role || 'user'
-    });
+    };
+
+    // Thêm phone và address nếu có
+    if (phone) userData.phone = phone;
+    if (address) userData.address = address;
+
+    const user = await User.create(userData);
 
     res.status(201).json({
       success: true,

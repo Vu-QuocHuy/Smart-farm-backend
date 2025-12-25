@@ -308,47 +308,94 @@ class MQTTService {
         return;
       }
 
-      let alert = null;
+      let alertType = null;
+      let shouldCreateAlert = false;
+      let shouldResolveAlert = false;
 
       // Với mô hình mới: mỗi sensorType chỉ có 1 thresholdValue
       // soil_moisture, light: thấp hơn ngưỡng -> cảnh báo
       // temperature: cao hơn ngưỡng -> cảnh báo
-      if (sensorType === "soil_moisture" && value < threshold.thresholdValue) {
-        alert = {
-          type: `low_${sensorType}`,
-          severity: threshold.severity,
-          title: "Độ ẩm đất thấp",
-          message: `Độ ẩm đất hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`,
-          status: "active",
-        };
-      } else if (sensorType === "light" && value < threshold.thresholdValue) {
-        alert = {
-          type: `low_${sensorType}`,
-          severity: threshold.severity,
-          title: "Ánh sáng yếu",
-          message: `Ánh sáng hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`,
-          status: "active",
-        };
-      } else if (
-        sensorType === "temperature" &&
-        value > threshold.thresholdValue
-      ) {
-        alert = {
-          type: `high_${sensorType}`,
-          severity: threshold.severity,
-          title: "Nhiệt độ cao",
-          message: `Nhiệt độ hiện tại ${value}, vượt ngưỡng ${threshold.thresholdValue}`,
-          status: "active",
-        };
+      if (sensorType === "soil_moisture") {
+        alertType = `low_${sensorType}`;
+        if (value < threshold.thresholdValue) {
+          shouldCreateAlert = true;
+        } else {
+          shouldResolveAlert = true;
+        }
+      } else if (sensorType === "light") {
+        alertType = `low_${sensorType}`;
+        if (value < threshold.thresholdValue) {
+          shouldCreateAlert = true;
+        } else {
+          shouldResolveAlert = true;
+        }
+      } else if (sensorType === "temperature") {
+        alertType = `high_${sensorType}`;
+        if (value > threshold.thresholdValue) {
+          shouldCreateAlert = true;
+        } else {
+          shouldResolveAlert = true;
+        }
       }
 
-      // Tạo alert nếu có
-      if (alert) {
-        await Alert.create(alert);
-        console.log(`Alert created: ${alert.title}`);
+      // Kiểm tra xem đã có alert active với type này chưa
+      const existingAlert = await Alert.findOne({
+        type: alertType,
+        status: "active",
+      });
+
+      // Tạo alert mới nếu vượt ngưỡng và chưa có alert active
+      if (shouldCreateAlert && !existingAlert) {
+        let alertTitle = "";
+        let alertMessage = "";
+
+        if (sensorType === "soil_moisture") {
+          alertTitle = "Độ ẩm đất thấp";
+          alertMessage = `Độ ẩm đất hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`;
+        } else if (sensorType === "light") {
+          alertTitle = "Ánh sáng yếu";
+          alertMessage = `Ánh sáng hiện tại ${value}, thấp hơn ngưỡng ${threshold.thresholdValue}`;
+        } else if (sensorType === "temperature") {
+          alertTitle = "Nhiệt độ cao";
+          alertMessage = `Nhiệt độ hiện tại ${value}, vượt ngưỡng ${threshold.thresholdValue}`;
+        }
+
+        const alert = await Alert.create({
+          type: alertType,
+          severity: threshold.severity,
+          title: alertTitle,
+          message: alertMessage,
+          status: "active",
+        });
+
+        console.log(`Alert created: ${alertTitle}`);
 
         // Publish alert lên MQTT cho app
         this.publishAlert(alert);
+      }
+
+      // Tự động resolve alert nếu giá trị về mức an toàn
+      if (shouldResolveAlert && existingAlert) {
+        let resolvedMessage = "";
+        if (sensorType === "soil_moisture") {
+          resolvedMessage = `Độ ẩm đất đã về mức an toàn (${value} >= ${threshold.thresholdValue})`;
+        } else if (sensorType === "light") {
+          resolvedMessage = `Ánh sáng đã về mức an toàn (${value} >= ${threshold.thresholdValue})`;
+        } else if (sensorType === "temperature") {
+          resolvedMessage = `Nhiệt độ đã về mức an toàn (${value} <= ${threshold.thresholdValue})`;
+        }
+
+        // Cập nhật message để thông báo đã tự động resolve
+        existingAlert.message = `${existingAlert.message} - [Tự động giải quyết: ${resolvedMessage}]`;
+        existingAlert.status = "resolved";
+        existingAlert.autoResolved = true;
+        existingAlert.resolvedAt = new Date();
+        await existingAlert.save();
+
+        console.log(`Alert auto-resolved: ${existingAlert.title} - ${resolvedMessage}`);
+
+        // Publish alert resolved lên MQTT cho app
+        this.publishAlert(existingAlert);
       }
     } catch (error) {
       console.error("Error checking thresholds:", error);
