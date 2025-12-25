@@ -1,4 +1,66 @@
 const ActivityLog = require('../models/ActivityLog');
+const User = require('../models/User');
+const Schedule = require('../models/Schedule');
+const Threshold = require('../models/Threshold');
+
+// Helper function để lấy tên đối tượng
+const getResourceName = async (log) => {
+  // Nếu có tên trong details, ưu tiên sử dụng
+  if (log.details) {
+    if (log.resourceType === 'user' && log.details.username) {
+      return log.details.username;
+    }
+    if (log.resourceType === 'schedule' && log.details.name) {
+      return log.details.name;
+    }
+    if (log.resourceType === 'device' && log.details.deviceName) {
+      return log.details.deviceName;
+    }
+    if (log.resourceType === 'threshold' && log.details.sensorType) {
+      const sensorTypeMap = {
+        'temperature': 'Nhiệt độ',
+        'soil_moisture': 'Độ ẩm đất',
+        'light': 'Ánh sáng'
+      };
+      return sensorTypeMap[log.details.sensorType] || log.details.sensorType;
+    }
+  }
+
+  // Nếu không có trong details, fetch từ database
+  if (log.resourceId) {
+    try {
+      switch (log.resourceType) {
+        case 'user':
+          const user = await User.findById(log.resourceId).select('username email');
+          return user ? user.username : log.resourceId;
+        case 'schedule':
+          const schedule = await Schedule.findById(log.resourceId).select('name');
+          return schedule ? schedule.name : log.resourceId;
+        case 'threshold':
+          const threshold = await Threshold.findById(log.resourceId).select('sensorType');
+          if (threshold) {
+            const sensorTypeMap = {
+              'temperature': 'Nhiệt độ',
+              'soil_moisture': 'Độ ẩm đất',
+              'light': 'Ánh sáng'
+            };
+            return sensorTypeMap[threshold.sensorType] || threshold.sensorType;
+          }
+          return log.resourceId;
+        case 'device':
+          // Device không có model riêng, lấy từ details hoặc resourceId
+          return log.details?.deviceName || log.resourceId;
+        default:
+          return log.resourceId;
+      }
+    } catch (error) {
+      console.error('Error fetching resource name:', error);
+      return log.resourceId;
+    }
+  }
+
+  return null;
+};
 
 // Lấy tất cả log (Admin only)
 exports.getAllLogs = async (req, res) => {
@@ -37,10 +99,19 @@ exports.getAllLogs = async (req, res) => {
       ActivityLog.countDocuments(filter)
     ]);
 
+    // Thêm resourceName vào mỗi log
+    const logsWithResourceName = await Promise.all(
+      logs.map(async (log) => {
+        const logObj = log.toObject();
+        logObj.resourceName = await getResourceName(logObj);
+        return logObj;
+      })
+    );
+
     res.status(200).json({
       success: true,
       data: {
-        logs,
+        logs: logsWithResourceName,
         pagination: {
           total,
           page: parseInt(page),
