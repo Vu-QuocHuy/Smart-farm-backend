@@ -109,7 +109,7 @@ exports.updateUser = async (req, res) => {
     }
 
     // Các field được phép cập nhật
-    const allowedUpdates = ['email', 'phone', 'address'];
+    const allowedUpdates = ['username', 'email', 'phone', 'address'];
     
     // Admin có thể cập nhật thêm role
     if (req.user.role === 'admin') {
@@ -123,6 +123,37 @@ exports.updateUser = async (req, res) => {
         updates[key] = req.body[key];
       }
     });
+
+    // Validate username nếu có thay đổi
+    if (updates.username && updates.username !== user.username) {
+      // Kiểm tra username đã tồn tại chưa
+      const existingUser = await User.findOne({ 
+        username: updates.username,
+        _id: { $ne: user._id }
+      });
+      
+      if (existingUser) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username đã được sử dụng'
+        });
+      }
+
+      // Validate độ dài username
+      if (updates.username.length < 3) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username phải có ít nhất 3 ký tự'
+        });
+      }
+
+      if (updates.username.length > 30) {
+        return res.status(400).json({
+          success: false,
+          message: 'Username không được quá 30 ký tự'
+        });
+      }
+    }
 
     // Không cho phép tự thay đổi role của chính mình
     if (updates.role && req.user.id === user._id.toString()) {

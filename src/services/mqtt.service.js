@@ -376,23 +376,13 @@ class MQTTService {
 
       // Tự động resolve alert nếu giá trị về mức an toàn
       if (shouldResolveAlert && existingAlert) {
-        let resolvedMessage = "";
-        if (sensorType === "soil_moisture") {
-          resolvedMessage = `Độ ẩm đất đã về mức an toàn (${value} >= ${threshold.thresholdValue})`;
-        } else if (sensorType === "light") {
-          resolvedMessage = `Ánh sáng đã về mức an toàn (${value} >= ${threshold.thresholdValue})`;
-        } else if (sensorType === "temperature") {
-          resolvedMessage = `Nhiệt độ đã về mức an toàn (${value} <= ${threshold.thresholdValue})`;
-        }
-
-        // Cập nhật message để thông báo đã tự động resolve
-        existingAlert.message = `${existingAlert.message} - [Tự động giải quyết: ${resolvedMessage}]`;
+        // Chỉ cập nhật trạng thái, không thay đổi message
         existingAlert.status = "resolved";
         existingAlert.autoResolved = true;
         existingAlert.resolvedAt = new Date();
         await existingAlert.save();
 
-        console.log(`Alert auto-resolved: ${existingAlert.title} - ${resolvedMessage}`);
+        console.log(`Alert auto-resolved: ${existingAlert.title}`);
 
         // Publish alert resolved lên MQTT cho app
         this.publishAlert(existingAlert);
