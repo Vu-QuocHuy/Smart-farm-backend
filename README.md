@@ -111,6 +111,30 @@ cp .env.example .env
 npm start
 ```
 
+### 2.1 Chạy Backend + MongoDB bằng Docker Compose (Linux)
+
+```bash
+cd Smart-farm-backend
+cp .env.example .env
+
+# Chỉnh lại các biến quan trọng trong .env (ít nhất: JWT_SECRET, MQTT_*)
+
+docker compose up -d --build
+```
+
+Kiểm tra nhanh:
+
+```bash
+docker compose ps
+curl http://localhost:8080/health
+```
+
+Ghi chú:
+
+- MongoDB chạy nội bộ trong Docker network với URI: `mongodb://mongo:27017/smart_farm`
+- Dữ liệu MongoDB được lưu persist qua volume `mongo_data`
+- Để dừng toàn bộ stack: `docker compose down`
+
 ### 3. Setup Mobile App
 
 ```bash

@@ -1,0 +1,47 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: smart-farm-mongo
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-smart_farm}
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test:
+        ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: smart-farm-backend
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8080}:${PORT:-3000}"
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: ${PORT:-3000}
+      MONGODB_URI: mongodb://mongo:27017/${MONGO_DB_NAME:-smart_farm}
+
+      JWT_SECRET: ${JWT_SECRET:-change_this_jwt_secret_in_production}
+      JWT_EXPIRE: ${JWT_EXPIRE:-15m}
+      REFRESH_TOKEN_EXPIRE: ${REFRESH_TOKEN_EXPIRE:-30d}
+
+      MQTT_BROKER: ${MQTT_BROKER:-broker.emqx.io}
+      MQTT_PORT: ${MQTT_PORT:-8883}
+      MQTT_CLIENT_ID: ${MQTT_CLIENT_ID:-smart_farm_backend}
+      MQTT_USERNAME: ${MQTT_USERNAME:-}
+      MQTT_PASSWORD: ${MQTT_PASSWORD:-}
+      MQTT_TOPIC_PREFIX: ${MQTT_TOPIC_PREFIX:-farm}
+
+volumes:
+  mongo_data:
