@@ -3,8 +3,6 @@ services:
     image: mongo:7
     container_name: smart-farm-mongo
     restart: unless-stopped
-    ports:
-      - "${MONGO_PORT:-27017}:27017"
     environment:
       MONGO_INITDB_DATABASE: ${MONGO_DB_NAME:-smart_farm}
     volumes:
