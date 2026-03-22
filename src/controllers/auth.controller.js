@@ -1,7 +1,8 @@
-const User = require('../models/User');
-const RefreshToken = require('../models/RefreshToken');
-const jwt = require('jsonwebtoken');
-const crypto = require('crypto');
+const User = require("../models/User");
+const RefreshToken = require("../models/RefreshToken");
+const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
+const bcrypt = require("bcryptjs");
 
 // @desc    Đăng ký
 // @route   POST /api/auth/register
@@ -12,22 +13,26 @@ exports.register = async (req, res) => {
 
     // Check user đã tồn tại
     const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-    
+
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: existingUser.email === email 
-          ? 'Email đã được sử dụng' 
-          : 'Username đã được sử dụng'
+        message:
+          existingUser.email === email
+            ? "Email đã được sử dụng"
+            : "Username đã được sử dụng",
       });
     }
 
-    // Tạo user mới (password sẽ tự động hash trong model)
-    const userData = { 
-      username, 
-      email, 
-      password,
-      role: role || 'user'
+    // Hash password bằng bcrypt trước khi lưu
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Tạo user mới
+    const userData = {
+      username,
+      email,
+      password: hashedPassword,
+      role: role || "user",
     };
 
     // Thêm phone và address nếu có
@@ -38,20 +43,19 @@ exports.register = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: 'Đăng ký thành công',
+      message: "Đăng ký thành công",
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
@@ -64,12 +68,12 @@ exports.login = async (req, res) => {
     const { email, password } = req.body;
 
     // Tìm user (select password vì đã set select: false)
-    const user = await User.findOne({ email }).select('+password');
+    const user = await User.findOne({ email }).select("+password");
 
     if (!user) {
       return res.status(401).json({
         success: false,
-        message: 'Email hoặc mật khẩu không chính xác'
+        message: "Email hoặc mật khẩu không chính xác",
       });
     }
 
@@ -77,7 +81,7 @@ exports.login = async (req, res) => {
     if (!user.isActive) {
       return res.status(403).json({
         success: false,
-        message: 'Tài khoản đã bị vô hiệu hóa'
+        message: "Tài khoản đã bị vô hiệu hóa",
       });
     }
 
@@ -87,7 +91,7 @@ exports.login = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Email hoặc mật khẩu không chính xác'
+        message: "Email hoặc mật khẩu không chính xác",
       });
     }
 
@@ -95,23 +99,23 @@ exports.login = async (req, res) => {
     const accessToken = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' } // 15 phút
+      { expiresIn: "15m" }, // 15 phút
     );
 
     // Tạo Refresh Token (dài hạn)
-    const refreshToken = crypto.randomBytes(64).toString('hex');
+    const refreshToken = crypto.randomBytes(64).toString("hex");
     const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 ngày
 
     // Lưu refresh token vào DB
     await RefreshToken.create({
       token: refreshToken,
       userId: user._id,
-      expiresAt
+      expiresAt,
     });
 
     res.json({
       success: true,
-      message: 'Đăng nhập thành công',
+      message: "Đăng nhập thành công",
       accessToken,
       refreshToken,
       expiresIn: 900, // 15 phút = 900 giây
@@ -119,15 +123,14 @@ exports.login = async (req, res) => {
         id: user._id,
         username: user.username,
         email: user.email,
-        role: user.role
-      }
+        role: user.role,
+      },
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
@@ -142,7 +145,7 @@ exports.refreshToken = async (req, res) => {
     if (!refreshToken) {
       return res.status(400).json({
         success: false,
-        message: 'Thiếu refresh token'
+        message: "Thiếu refresh token",
       });
     }
 
@@ -152,7 +155,7 @@ exports.refreshToken = async (req, res) => {
     if (!tokenDoc) {
       return res.status(401).json({
         success: false,
-        message: 'Refresh token không hợp lệ'
+        message: "Refresh token không hợp lệ",
       });
     }
 
@@ -161,7 +164,7 @@ exports.refreshToken = async (req, res) => {
       await RefreshToken.deleteOne({ _id: tokenDoc._id });
       return res.status(401).json({
         success: false,
-        message: 'Refresh token đã hết hạn. Vui lòng đăng nhập lại'
+        message: "Refresh token đã hết hạn. Vui lòng đăng nhập lại",
       });
     }
 
@@ -171,7 +174,7 @@ exports.refreshToken = async (req, res) => {
     if (!user || !user.isActive) {
       return res.status(401).json({
         success: false,
-        message: 'User không tồn tại hoặc đã bị vô hiệu hóa'
+        message: "User không tồn tại hoặc đã bị vô hiệu hóa",
       });
     }
 
@@ -179,20 +182,19 @@ exports.refreshToken = async (req, res) => {
     const newAccessToken = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' }
+      { expiresIn: "15m" },
     );
 
     res.json({
       success: true,
       accessToken: newAccessToken,
-      expiresIn: 900
+      expiresIn: 900,
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
@@ -210,14 +212,13 @@ exports.logout = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Đăng xuất thành công'
+      message: "Đăng xuất thành công",
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
@@ -233,14 +234,14 @@ exports.changePassword = async (req, res) => {
     if (!currentPassword || !newPassword || !confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Vui lòng nhập đầy đủ thông tin'
+        message: "Vui lòng nhập đầy đủ thông tin",
       });
     }
 
     if (newPassword.length < 6) {
       return res.status(400).json({
         success: false,
-        message: 'Mật khẩu mới phải ít nhất 6 ký tự'
+        message: "Mật khẩu mới phải ít nhất 6 ký tự",
       });
     }
 
@@ -248,12 +249,12 @@ exports.changePassword = async (req, res) => {
     if (newPassword !== confirmPassword) {
       return res.status(400).json({
         success: false,
-        message: 'Mật khẩu mới và xác nhận mật khẩu không khớp'
+        message: "Mật khẩu mới và xác nhận mật khẩu không khớp",
       });
     }
 
     // Lấy user từ token (req.user được set bởi authenticate middleware)
-    const user = await User.findById(req.user._id).select('+password');
+    const user = await User.findById(req.user._id).select("+password");
 
     // Kiểm tra mật khẩu hiện tại
     const isMatch = await user.comparePassword(currentPassword);
@@ -261,7 +262,7 @@ exports.changePassword = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({
         success: false,
-        message: 'Mật khẩu hiện tại không đúng'
+        message: "Mật khẩu hiện tại không đúng",
       });
     }
 
@@ -274,14 +275,13 @@ exports.changePassword = async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Đổi mật khẩu thành công. Vui lòng đăng nhập lại'
+      message: "Đổi mật khẩu thành công. Vui lòng đăng nhập lại",
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
-      message: 'Lỗi server',
-      error: error.message
+      message: "Lỗi server",
+      error: error.message,
     });
   }
 };
